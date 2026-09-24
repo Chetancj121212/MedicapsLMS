@@ -1,0 +1,1705 @@
+Medicaps University ECE Online Course Platform
+
+Build a minimal, modern Learning Management System (LMS) prototype for the:
+
+Department of Electronics Engineering
+Medicaps University, Indore
+
+The platform will provide structured online courses containing video lecture series, modules/chapters, quizzes, progress tracking, course completion, and digitally verifiable certificates.
+
+The application should feel like an official university academic platform rather than a generic SaaS dashboard.
+
+1. CORE USER FLOW
+Student
+Login
+  ↓
+Student Dashboard
+  ↓
+Browse Available Courses
+  ↓
+Open Course
+  ↓
+Start Module 1
+  ↓
+Watch Lecture
+  ↓
+Lecture Completed
+  ↓
+Next Lecture Unlocks
+  ↓
+Complete Module
+  ↓
+Module Quiz Unlocks
+  ↓
+Pass Quiz
+  ↓
+Next Module Unlocks
+  ↓
+Complete All Modules
+  ↓
+Final Quiz
+  ↓
+Score 100%
+  ↓
+Course Completed
+  ↓
+Certificate Generated
+  ↓
+QR Code + Certificate ID
+  ↓
+Certificate Verification Page
+Admin
+Admin Login
+  ↓
+Admin Dashboard
+  ↓
+Courses
+  ↓
+Create/Edit Course
+  ↓
+Course Builder
+  ↓
++ Add Content
+     ├── Video Lecture
+     └── Quiz
+  ↓
+Configure Course
+  ↓
+Publish
+  ↓
+Monitor Students
+  ↓
+View Progress / Results / Certificates
+2. TECHNOLOGY
+
+Use:
+
+Frontend
+Next.js
+TypeScript
+Tailwind CSS
+shadcn/ui
+Lucide icons
+Responsive design
+Backend
+
+Prefer:
+
+FastAPI
+Python
+PostgreSQL
+SQLAlchemy or equivalent ORM
+REST API
+
+Authentication:
+
+Enrollment number + password
+Secure password hashing
+JWT/session-based authentication
+Role-based authorization
+
+The architecture should keep frontend, backend, authentication, database, and storage concerns separated.
+
+3. DEPLOYMENT REQUIREMENT
+
+The frontend will eventually be hosted on:
+
+Netlify
+
+Videos should NOT be stored in cloud storage.
+
+For the prototype:
+
+Video files are uploaded/maintained locally.
+The application stores the video path/URL in the database.
+The video player fetches the video from the configured video location.
+Do not integrate AWS S3, Cloudinary, Firebase Storage, Vimeo, YouTube, etc.
+
+Important:
+
+Design a small storage abstraction so that video storage can later be changed without rewriting the course system.
+
+Example conceptual structure:
+
+VideoStorage
+    ├── LocalStorage
+    └── FutureCloudStorage
+
+The current implementation should use local video storage.
+
+4. MEDICAPS UNIVERSITY DESIGN
+
+Use the official Medicaps University website as visual inspiration.
+
+Match the general:
+
+Color palette
+Typography
+Academic branding
+Button styling
+Spacing
+Navigation style
+Visual hierarchy
+
+Do not make the interface flashy.
+
+Desired aesthetic:
+
+Minimal
+Professional
+Academic
+Modern
+Clean
+Technology-oriented
+University-grade
+
+Use a centralized theme/token configuration so colors can easily be modified later.
+
+Use shadcn/ui extensively.
+
+Avoid:
+
+Excessive gradients
+Excessive glassmorphism
+Huge animations
+Neon colors
+Startup-style visual clutter
+5. USER ROLES
+
+The long-term role architecture should support:
+
+SUPER_ADMIN
+DEPARTMENT_ADMIN
+COURSE_INSTRUCTOR
+STUDENT
+
+However, for the prototype:
+
+Student
+
+Full student functionality.
+
+Basic Admin
+
+Use a single admin interface with basic administrative permissions.
+
+Structure the authorization system so that Super Admin, Department Admin, and Course Instructor can be separated later without rebuilding authentication.
+
+6. STUDENT AUTHENTICATION
+
+Student login:
+
+Enrollment Number
+Password
+
+Students are created by administrators.
+
+Support two methods for now:
+
+Admin manually creates a student.
+Admin imports students through CSV/Excel-compatible import.
+
+Student registration should NOT be publicly open.
+
+Admin should be able to reset a student's password.
+
+Passwords must never be stored in plaintext.
+
+7. STUDENT DATA
+
+Student table should contain:
+
+id
+user_id
+full_name
+enrollment_number
+email
+department
+program
+semester
+academic_year
+profile_photo
+created_at
+updated_at
+
+Minimum required information:
+
+Name
+Enrollment Number
+Password/authentication
+Email
+
+Other academic fields should remain available for future use.
+
+8. PUBLIC LANDING PAGE
+
+Create a minimal public homepage.
+
+Header:
+
+Medicaps University
+Department of Electronics Engineering
+
+Navigation:
+
+Home
+Courses
+About
+Login
+
+Hero:
+
+Learn. Build. Innovate.
+
+Short description explaining that the ECE Department offers structured online courses with lectures, assessments, and certificates.
+
+Buttons:
+
+Explore Courses
+Student Login
+
+Course section:
+
+Display published courses.
+
+Each card:
+
+Course title
+Short description
+Instructor
+Number of modules
+Number of lectures
+Number of quizzes
+Estimated duration
+View Course
+
+Footer:
+
+Medicaps University
+Department of Electronics Engineering
+Contact placeholder
+Copyright
+9. STUDENT DASHBOARD
+
+Display:
+
+Welcome, [Student Name]
+Enrollment No: [XXXX]
+
+Statistics:
+
+Enrolled Courses
+Courses In Progress
+Courses Completed
+Certificates Earned
+
+Course cards:
+
+Introduction to Embedded Systems
+
+Progress
+████████░░ 80%
+
+8 / 10 lectures completed
+
+Current:
+Module 3 → Lecture 2
+
+[Continue Learning]
+10. COURSE STRUCTURE
+
+Courses can contain multiple modules/chapters.
+
+Structure:
+
+COURSE
+
+Module 1
+ ├── Lecture 1
+ ├── Lecture 2
+ └── Quiz 1
+
+Module 2
+ ├── Lecture 3
+ ├── Lecture 4
+ └── Quiz 2
+
+Module 3
+ ├── Lecture 5
+ ├── Lecture 6
+ └── Quiz 3
+
+Final Assessment
+
+Each module may contain:
+
+Multiple videos
+One or more quizzes
+11. UNLOCKING SYSTEM
+
+This is an important feature.
+
+Content should unlock progressively.
+
+Default behavior:
+
+Module 1
+    ↓
+Lecture 1
+    ↓
+Lecture 2 unlocks
+    ↓
+Lecture 3 unlocks
+    ↓
+Module Quiz unlocks
+    ↓
+Quiz Passed
+    ↓
+Module 2 unlocks
+
+A student cannot access locked content.
+
+Display locked content visually:
+
+🔒 Lecture 4
+Complete Lecture 3 first
+
+Completed content:
+
+✓ Lecture 3
+Completed
+
+Current content:
+
+● Lecture 4
+Continue
+12. VIDEO LECTURES
+
+Admin adds videos through:
+
++ Add Content
+      ↓
++ Video Lecture
+      ↓
+Select MP4
+      ↓
+Upload
+      ↓
+Video appears in curriculum
+
+Video metadata:
+
+Title
+Description
+Module
+Order
+Video path/URL
+Duration
+Thumbnail
+Published
+Required
+
+Supported format for prototype:
+
+MP4
+
+Use HTML5 video.
+
+Controls:
+
+Play
+Pause
+Seek
+Volume
+Fullscreen
+Playback speed if convenient
+13. VIDEO COMPLETION
+
+Students can seek through the video.
+
+However, track actual watched progress.
+
+For example:
+
+watched: 72%
+
+Default completion threshold:
+
+90%
+
+When the student reaches 90% watched:
+
+Lecture Completed ✓
+
+Store:
+
+watched_seconds
+completion_percentage
+completed
+completed_at
+last_watched_at
+
+The student should be able to resume from the last position.
+
+14. QUIZ SYSTEM
+
+Support two question types:
+
+MCQ
+Which protocol is commonly used for short-distance serial communication?
+
+○ UART
+○ HTTP
+○ FTP
+○ SMTP
+TRUE/FALSE
+UART is a serial communication protocol.
+
+○ True
+○ False
+15. QUIZ BUILDER
+
+Admin:
+
++ Add Content
+      ↓
++ Quiz
+
+Quiz configuration:
+
+Quiz Title
+Description
+Passing Percentage
+Maximum Attempts
+Randomize Questions
+Published
+
+Question builder:
+
+Question 1
+
+Question:
+_____________________________
+
+Question Type:
+[Multiple Choice]
+
+Option A:
+_________________
+
+Option B:
+_________________
+
+Option C:
+_________________
+
+Option D:
+_________________
+
+Correct Answer:
+[Option B]
+
+Marks:
+1
+
+For True/False:
+
+Correct Answer:
+True / False
+
+Allow:
+
++ Add Question
+
+Admin can:
+
+Edit
+Delete
+Reorder
+Change marks
+Change correct answer
+16. QUIZ RANDOMIZATION
+
+Enable optional question randomization.
+
+If enabled:
+
+Student A:
+
+Q1 → Q5 → Q3 → Q2 → Q4
+
+Student B:
+
+Q3 → Q1 → Q4 → Q5 → Q2
+
+Answers must be evaluated server-side.
+
+Never trust a score calculated only in the frontend.
+
+17. QUIZ ATTEMPTS
+
+Students can retry failed quizzes.
+
+After failure:
+
+You scored 72%.
+
+Passing score: 100%
+
+You haven't passed this assessment yet.
+
+[Try Again]
+
+Provide a useful hint after a failed attempt.
+
+For example:
+
+Hint:
+Review Module 2, Lecture 3 before attempting again.
+
+Do not reveal all correct answers immediately.
+
+Store every attempt.
+
+Admin should be able to see:
+
+Attempt 1
+72%
+Failed
+
+Attempt 2
+86%
+Failed
+
+Attempt 3
+100%
+Passed
+18. QUIZ PASSING REQUIREMENT
+
+For this prototype:
+
+Passing percentage = 100%
+
+This means the student must answer every question correctly.
+
+After passing:
+
+✓ Quiz Passed
+
+Module 2 completed.
+
+Module 3 is now unlocked.
+
+Make the passing percentage configurable per quiz so the system can later support 60%, 70%, 80%, etc.
+
+19. FINAL COURSE COMPLETION
+
+A student receives course completion only when:
+
+All required lectures completed
+        +
+All required module quizzes passed
+        +
+Final assessment passed at 100%
+
+Then:
+
+Course Status = COMPLETED
+
+Record:
+
+completed_at
+
+Once completed, the course remains completed even if the student later revisits content.
+
+20. CERTIFICATE
+
+Automatically generate a certificate when the student completes the course.
+
+Certificate title:
+
+CERTIFICATE OF COMPLETION
+
+Content:
+
+MEDICAPS UNIVERSITY
+
+Department of Electronics Engineering
+
+
+CERTIFICATE OF COMPLETION
+
+
+This is to certify that
+
+[STUDENT NAME]
+
+Enrollment No. [ENROLLMENT NUMBER]
+
+has successfully completed the online course
+
+"[COURSE NAME]"
+
+offered by the Department of Electronics
+and Communication Engineering,
+Medicaps University.
+
+
+Date of Completion:
+22 September 2026
+
+
+Certificate ID:
+ECE-2026-000123
+
+
+Authorized By
+
+Department of Electronics Engineering
+Medicaps University
+
+Include:
+
+University logo placeholder
+ECE Department name
+Student name
+Enrollment number
+Course name
+Completion date
+Certificate ID
+Authorized signature placeholder
+QR code
+Verification URL
+21. CERTIFICATE DESIGN
+
+Create a clean printable A4 landscape certificate.
+
+Design:
+
+┌─────────────────────────────────────────────────────┐
+│                                                     │
+│              [MEDICAPS UNIVERSITY LOGO]             │
+│                                                     │
+│          MEDICAPS UNIVERSITY                        │
+│ Department of Electronics & Communication Engg.     │
+│                                                     │
+│              CERTIFICATE OF COMPLETION              │
+│                                                     │
+│                 This is to certify that             │
+│                                                     │
+│                    Chetan Kumar                     │
+│                 Enrollment: 23XXXX                  │
+│                                                     │
+│              has successfully completed             │
+│                                                     │
+│           "Introduction to Embedded Systems"        │
+│                                                     │
+│                                                     │
+│ Date: 22 September 2026        Certificate ID       │
+│                               ECE-2026-000123        │
+│                                                     │
+│                         [QR CODE]                    │
+│                                                     │
+│       Department Authorization / Signature           │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+
+Keep it elegant and academic.
+
+Do not overload the certificate with graphics.
+
+Use university colors.
+
+Certificate should be downloadable as PDF.
+
+22. CERTIFICATE ID
+
+Generate a unique certificate ID.
+
+Example:
+
+ECE-2026-000001
+ECE-2026-000002
+ECE-2026-000003
+
+Never reuse certificate IDs.
+
+Recommended database field:
+
+certificate_number
+
+with a unique database constraint.
+
+23. QR VERIFICATION
+
+Every certificate must contain a QR code.
+
+Example certificate ID:
+
+ECE-2026-000123
+
+QR should encode a verification URL such as:
+
+https://your-domain.in/verify/ECE-2026-000123
+
+Do not encode sensitive student information directly inside the QR.
+
+Only encode the public verification URL.
+
+24. CERTIFICATE VERIFICATION PAGE
+
+Create public route:
+
+/verify/[certificateId]
+
+Anyone can scan the QR code.
+
+Example:
+
+Certificate Verification
+
+✓ VERIFIED
+
+Certificate ID:
+ECE-2026-000123
+
+Student:
+Chetan Kumar
+
+Enrollment No:
+23XXXX
+
+Course:
+Introduction to Embedded Systems
+
+Department:
+Electronics and Communication Engineering
+
+Institution:
+Medicaps University
+
+Completion Date:
+22 September 2026
+
+Issued By:
+Department of Electronics Engineering
+
+If valid:
+
+✓ This certificate is authentic and was issued by
+Medicaps University.
+
+If invalid:
+
+Certificate Not Found
+
+The certificate ID could not be verified.
+25. CERTIFICATE VERIFICATION LOGIC
+
+Conceptually:
+
+QR Scan
+   ↓
+/verify/ECE-2026-000123
+   ↓
+Backend receives certificate ID
+   ↓
+Search certificates table
+   ↓
+Certificate exists?
+   ├── NO → Invalid Certificate
+   │
+   └── YES
+         ↓
+      Is revoked?
+         ├── YES → Certificate Revoked
+         │
+         └── NO
+              ↓
+         Display verification
+
+Certificate table:
+
+id
+certificate_number UNIQUE
+student_id
+course_id
+issued_at
+certificate_file
+is_revoked
+revoked_at
+
+The verification page must query the backend/database rather than trusting information encoded inside the QR.
+
+26. CERTIFICATE REVOCATION
+
+Even though this is a prototype, include:
+
+is_revoked
+
+Admin can later revoke a certificate.
+
+If revoked:
+
+⚠ CERTIFICATE REVOKED
+
+This certificate is no longer considered valid.
+
+Keep the certificate record in the database.
+
+Do not delete it.
+
+27. ADMIN DASHBOARD
+
+Basic admin dashboard:
+
+Total Students
+Total Courses
+Published Courses
+Certificates Issued
+
+Recent activity:
+
+Student completed course
+New student added
+Quiz passed
+Certificate issued
+28. ADMIN COURSE BUILDER
+
+This is one of the most important parts of the UI.
+
+Course editor:
+
+Course Information
+
+Title
+Description
+Instructor
+Course Code
+Thumbnail
+Estimated Duration
+Published
+
+Below it:
+
+Course Curriculum
+
+Module 1
+────────────────────────
+
+✓ Introduction
+✓ Embedded Systems Overview
+
++ Add Content
+
+Module 2
+────────────────────────
+
+✓ Microcontrollers
+🔒 Quiz
+
++ Add Content
+
+Main button:
+
++ Add Content
+
+Dropdown:
+
+🎥 Video Lecture
+
+📝 Quiz
+
+Use a dialog/drawer for creation.
+
+29. ADMIN STUDENT MANAGEMENT
+
+Admin can:
+
+Add student
+Edit student
+Reset password
+Import students
+Search students
+View student
+View enrolled courses
+View progress
+View quiz results
+View certificates
+
+Student profile:
+
+Student Name
+Enrollment Number
+Email
+Department
+Semester
+
+Courses
+
+Course                  Progress
+Embedded Systems        100% ✓
+DSP Fundamentals         65%
+Digital Communication    20%
+
+Certificates
+[View Certificate]
+30. DATABASE MODEL
+
+Use a relational database.
+
+Core tables:
+
+users
+students
+admins
+
+courses
+modules
+lectures
+quizzes
+questions
+quiz_options
+
+enrollments
+lecture_progress
+quiz_attempts
+quiz_answers
+
+certificates
+
+Relationships:
+
+USER
+ ├── STUDENT
+ └── ADMIN
+
+
+COURSE
+ └── MODULE
+      ├── LECTURE
+      └── QUIZ
+           └── QUESTION
+                └── QUIZ_OPTION
+
+
+STUDENT
+ └── ENROLLMENT
+       └── COURSE
+
+
+STUDENT
+ └── LECTURE_PROGRESS
+       └── LECTURE
+
+
+STUDENT
+ └── QUIZ_ATTEMPT
+       └── QUIZ
+
+
+QUIZ_ATTEMPT
+ └── QUIZ_ANSWER
+       └── QUESTION
+
+
+STUDENT
+ └── CERTIFICATE
+       └── COURSE
+31. IMPORTANT DATABASE FIELDS
+users
+id
+username/enrollment_number
+password_hash
+role
+is_active
+created_at
+updated_at
+students
+id
+user_id
+full_name
+enrollment_number
+email
+department
+program
+semester
+academic_year
+created_at
+updated_at
+courses
+id
+course_code
+title
+short_description
+description
+instructor_id
+thumbnail
+estimated_duration
+status
+created_at
+updated_at
+published_at
+
+Status:
+
+DRAFT
+PUBLISHED
+ARCHIVED
+modules
+id
+course_id
+title
+description
+order_index
+is_required
+lectures
+id
+module_id
+title
+description
+video_path
+thumbnail
+duration
+order_index
+completion_threshold
+is_required
+is_published
+quizzes
+id
+module_id
+title
+description
+passing_percentage
+max_attempts
+randomize_questions
+is_required
+is_published
+questions
+id
+quiz_id
+question_text
+question_type
+marks
+order_index
+explanation
+
+Question types:
+
+MCQ
+TRUE_FALSE
+quiz_options
+id
+question_id
+option_text
+is_correct
+order_index
+enrollments
+id
+student_id
+course_id
+status
+progress_percentage
+enrolled_at
+started_at
+completed_at
+lecture_progress
+id
+student_id
+lecture_id
+watched_seconds
+completion_percentage
+last_position_seconds
+completed
+completed_at
+last_watched_at
+quiz_attempts
+id
+student_id
+quiz_id
+attempt_number
+score
+total_marks
+percentage
+passed
+started_at
+submitted_at
+quiz_answers
+id
+attempt_id
+question_id
+selected_option_id
+is_correct
+marks_awarded
+certificates
+id
+certificate_number UNIQUE
+student_id
+course_id
+issued_at
+certificate_file
+is_revoked
+revoked_at
+32. ROUTES
+Public
+/
+ /courses
+ /courses/[courseId]
+ /login
+ /verify/[certificateId]
+Student
+/student
+/student/courses
+/student/courses/[courseId]
+/student/courses/[courseId]/learn
+/student/courses/[courseId]/quiz/[quizId]
+/student/certificates
+/student/profile
+Admin
+/admin
+/admin/courses
+/admin/courses/new
+/admin/courses/[courseId]
+/admin/courses/[courseId]/builder
+/admin/students
+/admin/students/[studentId]
+/admin/certificates
+/admin/settings
+
+Protect all private routes.
+
+33. SHADCN COMPONENTS
+
+Use:
+
+Button
+Card
+Dialog
+Drawer
+Sheet
+Input
+Textarea
+Select
+Dropdown Menu
+Tabs
+Progress
+Badge
+Table
+Alert Dialog
+Toast/Sonner
+Tooltip
+Accordion
+Breadcrumb
+Avatar
+Skeleton
+Separator
+Checkbox
+Radio Group
+Switch
+
+Use Lucide icons.
+
+34. LOADING STATES
+
+Every data-heavy area should have skeleton states.
+
+Examples:
+
+DashboardSkeleton
+CourseCardSkeleton
+CourseCurriculumSkeleton
+StudentTableSkeleton
+CertificateSkeleton
+QuizSkeleton
+
+Do not show blank pages while loading.
+
+35. ERROR STATES
+
+Examples:
+
+Course Not Found
+
+The course you're looking for doesn't exist.
+
+Video:
+
+Unable to load this lecture.
+
+Please try again.
+
+Quiz:
+
+Unable to submit your quiz.
+
+Your answers have not been lost.
+Please try again.
+
+Certificate:
+
+Certificate Not Found
+
+The certificate ID could not be verified.
+36. RESPONSIVE DESIGN
+
+Desktop:
+
+Sidebar + Main Content
+
+Tablet:
+
+Collapsible Sidebar
+
+Mobile:
+
+Compact Navigation
+
+The course video player must work properly on mobile.
+
+Admin tables should become responsive cards or horizontally scrollable tables.
+
+37. ACCESSIBILITY
+
+Implement:
+
+Semantic HTML
+Keyboard navigation
+Visible focus states
+Accessible labels
+Proper form validation
+Accessible dialogs
+Sufficient color contrast
+Don't rely solely on colors for locked/completed states
+38. SAMPLE COURSE
+
+Create demo course:
+
+Introduction to Embedded Systems
+
+Modules:
+
+Module 1 — Introduction
+What is an Embedded System?
+Embedded System Architecture
+Quiz
+Module 2 — Microcontrollers
+Introduction to Microcontrollers
+GPIO and Timers
+Quiz
+Module 3 — Sensors
+Sensors and Actuators
+ADC and Sensor Interfaces
+Quiz
+Module 4 — Communication
+UART
+SPI
+I2C
+Final Assessment
+
+Use placeholder video files or documented local video paths.
+
+Do not include copyrighted lecture content.
+
+39. SAMPLE ACCOUNTS
+
+Provide seed data.
+
+Student:
+
+Enrollment:
+DEMO001
+
+Password:
+Demo@123
+
+Admin:
+
+Username:
+admin
+
+Password:
+Admin@123
+
+Clearly document that these credentials are development/demo credentials and must be changed before real deployment.
+
+40. CERTIFICATE DEMO
+
+Seed one example certificate record for testing the verification page.
+
+Example:
+
+Certificate:
+ECE-2026-000001
+
+Verification:
+
+/verify/ECE-2026-000001
+
+The QR code generated on the certificate must point to the same verification route.
+
+41. SECURITY
+
+Implement:
+
+Password hashing
+JWT/session security
+Role-based authorization
+Server-side validation
+Server-side quiz evaluation
+Parameterized DB queries/ORM
+Upload validation
+MP4 file validation
+File size limits
+Protected admin routes
+Protected student routes
+No sensitive information in QR codes
+No password exposure through APIs
+
+Never trust:
+
+studentId
+score
+completion status
+certificate eligibility
+
+sent from the frontend.
+
+The backend must verify these.
+
+42. VIDEO UPLOAD ARCHITECTURE
+
+Admin interface:
+
++ Add Video
+      ↓
+Video Upload Dialog
+      ↓
+Select MP4
+      ↓
+Upload
+      ↓
+Server/local storage
+      ↓
+Database stores path
+      ↓
+Lecture appears
+
+Example:
+
+/uploads/videos/embedded/microcontroller-01.mp4
+
+Do not store the binary video inside PostgreSQL.
+
+Database stores only metadata/path.
+
+43. FUTURE STORAGE COMPATIBILITY
+
+Design:
+
+StorageService
+
+with operations conceptually like:
+
+upload()
+delete()
+getUrl()
+exists()
+
+Current implementation:
+
+LocalStorageService
+
+Future:
+
+S3StorageService
+AzureBlobStorageService
+
+This is important because the current prototype deliberately avoids cloud video storage.
+
+44. CERTIFICATE VERIFICATION API
+
+Create an API conceptually like:
+
+GET /api/certificates/verify/{certificateNumber}
+
+Response:
+
+{
+  "valid": true,
+  "certificate": {
+    "certificateNumber": "ECE-2026-000123",
+    "studentName": "Chetan Kumar",
+    "enrollmentNumber": "23XXXX",
+    "courseName": "Introduction to Embedded Systems",
+    "department": "Electronics and Communication Engineering",
+    "institution": "Medicaps University",
+    "issuedAt": "2026-09-22",
+    "revoked": false
+  }
+}
+
+Do not expose unnecessary student information.
+
+The frontend verification page should consume this API.
+
+45. CERTIFICATE GENERATION LOGIC
+
+When final completion requirements become true:
+
+checkCourseCompletion(studentId, courseId)
+
+if:
+    allRequiredLecturesCompleted
+    AND allRequiredQuizzesPassed
+    AND finalQuizPassed
+then:
+
+    if certificate does not already exist:
+
+        generate unique certificate number
+
+        create certificate record
+
+        generate PDF
+
+        generate QR code
+
+        save certificate
+
+        return certificate
+
+If certificate already exists:
+
+return existing certificate
+
+Do not generate duplicate certificates for repeated visits.
+
+46. CERTIFICATE NUMBER GENERATION
+
+Format:
+
+ECE-{YEAR}-{SEQUENCE}
+
+Example:
+
+ECE-2026-000001
+ECE-2026-000002
+ECE-2026-000003
+
+Make it unique using a database constraint.
+
+Do not rely solely on frontend-generated numbers.
+
+47. FINAL UI QUALITY
+
+The final website should feel like:
+
+University LMS
+       +
+Modern E-learning Platform
+       +
+Minimal shadcn Dashboard
+
+It should NOT feel like:
+
+Generic Bootstrap Admin Panel
+
+Prioritize:
+
+Typography
+Spacing
+Alignment
+Consistent cards
+Clear hierarchy
+Simple navigation
+Professional academic appearance
+48. DEVELOPMENT ORDER
+
+Build incrementally.
+
+Phase 1
+
+Project setup
+
+Next.js
+Tailwind
+shadcn
+Theme
+FastAPI
+PostgreSQL
+Phase 2
+
+Authentication
+
+Student login
+Admin login
+Role authorization
+Phase 3
+
+Student
+
+Dashboard
+Course listing
+Course page
+Phase 4
+
+Course structure
+
+Courses
+Modules
+Lectures
+Phase 5
+
+Local videos
+
+Upload
+Video player
+Progress tracking
+Resume playback
+Phase 6
+
+Unlock system
+
+Sequential lectures
+Module completion
+Module unlocks
+Phase 7
+
+Quiz
+
+MCQ
+True/False
+Randomization
+Attempts
+100% passing requirement
+Retry
+Hint
+Phase 8
+
+Completion
+
+Course completion logic
+Phase 9
+
+Certificates
+
+PDF
+QR
+Certificate ID
+Verification page
+Phase 10
+
+Admin
+
+Dashboard
+Course builder
+
+
+Add Video
+
+
+Add Quiz
+Student management
+Phase 11
+
+Polish
+
+Skeletons
+Error states
+Responsive UI
+Accessibility
+Security
+Documentation
+
+At every phase keep the application runnable.
+
+49. README
+
+Provide a complete README containing:
+
+Project overview
+Architecture
+Requirements
+Installation
+Environment variables
+Database setup
+Migrations
+Seed data
+Running backend
+Running frontend
+Admin login
+Student login
+Adding videos
+Creating courses
+Creating quizzes
+Certificate generation
+Certificate verification
+Netlify deployment
+Local video configuration
+Production considerations
+50. FINAL SUCCESS CRITERIA
+
+The prototype is considered complete when the following can be demonstrated:
+
+Student
+Login
+ ↓
+See courses
+ ↓
+Open course
+ ↓
+Lecture 1 unlocked
+ ↓
+Watch lecture
+ ↓
+Lecture 2 unlocks
+ ↓
+Complete module
+ ↓
+Quiz unlocks
+ ↓
+Attempt quiz
+ ↓
+Fail → Hint → Retry
+ ↓
+Score 100%
+ ↓
+Next module unlocks
+ ↓
+Complete entire course
+ ↓
+Certificate automatically generated
+ ↓
+Download certificate
+ ↓
+Scan QR
+ ↓
+Verification page displays VALID
+Admin
+Login
+ ↓
+Create course
+ ↓
+Create module
+ ↓
++ Add Video
+ ↓
+Upload MP4
+ ↓
+ Add Quiz
+ ↓
+Add MCQ questions
+ ↓
+Add True/False questions
+ ↓
+Configure passing score
+ ↓
+Publish course
+ ↓
+View student progress
+ ↓
+View quiz attempts
+ ↓
+View certificates
+
+The entire experience should be simple enough for a department administrator to understand without technical training.
