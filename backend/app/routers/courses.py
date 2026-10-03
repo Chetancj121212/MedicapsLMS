@@ -137,7 +137,7 @@ async def get_learning_path(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-    # Also check if certificate exists
+    # Check if certificate exists (already issued by eligibility service)
     cert_stmt = select(Certificate).where(
         and_(Certificate.student_id == student.id, Certificate.course_id == course_id)
     )
@@ -151,3 +151,39 @@ async def get_learning_path(
     } if cert else None
 
     return curriculum_status
+
+
+@router.get("/{course_id}/eligibility")
+async def check_course_eligibility(
+    course_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns a detailed eligibility breakdown for the authenticated student.
+    This is the single source of truth for certificate eligibility.
+    """
+    stmt_stud = select(Student).where(Student.user_id == current_user.id)
+    res_stud = await db.execute(stmt_stud)
+    student = res_stud.scalar_one_or_none()
+    if not student:
+        raise HTTPException(status_code=403, detail="Student profile not found")
+
+    from app.services.eligibility_service import eligibility_service
+    eligibility = await eligibility_service.check_eligibility(db, student.id, course_id)
+
+    # Also check if certificate already exists
+    cert_stmt = select(Certificate).where(
+        and_(Certificate.student_id == student.id, Certificate.course_id == course_id)
+    )
+    cert_res = await db.execute(cert_stmt)
+    cert = cert_res.scalar_one_or_none()
+
+    response = eligibility.to_dict()
+    response["certificate"] = {
+        "certificate_number": cert.certificate_number,
+        "issued_at": cert.issued_at.strftime("%d %B %Y"),
+        "is_revoked": cert.is_revoked,
+    } if cert else None
+
+    return response

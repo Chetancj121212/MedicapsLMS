@@ -19,6 +19,8 @@ from app.config import settings
 from app.models.certificate import Certificate
 from app.models.student import Student
 from app.models.course import Course
+from app.models.user import User
+from app.models.enrollment import Enrollment
 
 
 class CertificateService:
@@ -196,6 +198,16 @@ class CertificateService:
         if existing:
             return existing
 
+        # ── FINAL ELIGIBILITY CHECK before issuing ──────────────────────
+        # This is the gatekeeper: no certificate is issued unless every
+        # mandatory requirement is confirmed satisfied in the database.
+        from app.services.eligibility_service import EligibilityService
+        eligibility = await EligibilityService.check_eligibility(
+            db, student_id, course_id
+        )
+        if not eligibility.eligible:
+            return None
+
         # Fetch student and course
         res_stud = await db.execute(select(Student).where(Student.id == student_id))
         student = res_stud.scalar_one_or_none()
@@ -244,6 +256,7 @@ class CertificateService:
         await db.commit()
         await db.refresh(cert)
         return cert
+
 
     @staticmethod
     async def verify_certificate(

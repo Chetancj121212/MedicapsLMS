@@ -125,6 +125,7 @@ export interface CurriculumItemStatus {
   is_completed: boolean;
   lock_reason?: string;
   order_index: number;
+  completion_threshold?: number;
   passing_percentage?: number;
   max_attempts?: number;
   is_final?: boolean;
@@ -150,6 +151,28 @@ export interface CurriculumModuleStatus {
   items: CurriculumItemStatus[];
 }
 
+export interface EligibilityBreakdown {
+  eligible: boolean;
+  course_completed: boolean;
+  lectures: {
+    total_required: number;
+    completed: number;
+    remaining: number;
+  };
+  module_quizzes: {
+    total_required: number;
+    passed: number;
+    remaining: number;
+  };
+  final_assessment: {
+    total_required: number;
+    passed: number;
+    remaining: number;
+    best_score: number | null;
+  };
+  missing_requirements: string[];
+}
+
 export interface CourseCurriculumStatus {
   enrollment: {
     id: number;
@@ -170,6 +193,7 @@ export interface CourseCurriculumStatus {
     issued_at: string;
     is_revoked: boolean;
   };
+  eligibility?: EligibilityBreakdown;
 }
 
 export interface QuizStudentView {
@@ -227,6 +251,7 @@ export interface Progress {
   unique_watched_seconds?: number;
   active_screen_time_seconds?: number;
   video_play_time_seconds?: number;
+  completion_threshold?: number;
   last_activity_at?: string;
 }
 

@@ -1,8 +1,40 @@
 """Video utilities for metadata extraction."""
 
+import re
 import struct
+import urllib.request
 from typing import Optional, Tuple
 from urllib.parse import parse_qs, urlparse
+
+
+def get_youtube_duration(video_id: str) -> Optional[float]:
+    """Fetch video duration in seconds for a YouTube video id."""
+    if not video_id:
+        return None
+    try:
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/119.0.0.0 Safari/537.36"
+                ),
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            content = resp.read(150000).decode("utf-8", "ignore")
+            m = re.search(r'"approxDurationMs"\s*:\s*"(\d+)"', content)
+            if m:
+                return round(float(m.group(1)) / 1000.0, 1)
+            m = re.search(r'"lengthSeconds"\s*:\s*"(\d+)"', content)
+            if m:
+                return float(m.group(1))
+    except Exception:
+        pass
+    return None
 
 
 def detect_video_source(url: str) -> Tuple[str, str]:

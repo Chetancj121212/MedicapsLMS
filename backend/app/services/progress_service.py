@@ -95,13 +95,14 @@ class ProgressService:
         if not lecture:
             raise ValueError("Lecture not found")
 
-        # Update lecture duration if database was missing it and client provided a valid duration
+        # Update lecture duration if client provided a valid duration
         if duration is not None and duration > 0:
-            if lecture.duration is None or lecture.duration <= 0:
-                lecture.duration = round(duration, 1)
+            eff_duration = round(duration, 1)
+            if lecture.duration is None or lecture.duration <= 0 or abs(lecture.duration - eff_duration) > 1.0:
+                lecture.duration = eff_duration
                 db.add(lecture)
-
-        eff_duration = lecture.duration or (duration if (duration and duration > 0) else 0.0)
+        else:
+            eff_duration = lecture.duration or 0.0
 
         prog_stmt = select(LectureProgress).where(
             and_(
@@ -112,37 +113,44 @@ class ProgressService:
         res = await db.execute(prog_stmt)
         progress = res.scalar_one_or_none()
 
-        # Parse existing segments
-        existing_segments: List[List[float]] = []
-        if progress and progress.watched_segments:
-            try:
-                existing_segments = json.loads(progress.watched_segments)
-            except Exception:
-                existing_segments = []
-
-        # Merge existing + new incoming segments
-        all_segments = existing_segments + (segments or [])
-        merged = merge_segments(all_segments, eff_duration if eff_duration > 0 else None)
-        unique_watched = calculate_unique_watched(merged)
-
-        # Completion requires both unique coverage and active screen time.
-        threshold_pct = lecture.completion_threshold if (lecture.completion_threshold and lecture.completion_threshold > 0) else 90.0
+        # Admin-configured threshold dynamically fetched from lecture model
+        threshold_pct = float(
+            lecture.completion_threshold
+            if (lecture.completion_threshold and lecture.completion_threshold > 0)
+            else 90.0
+        )
         
-        is_already_done = progress is not None and progress.completed
+        is_already_done = bool(progress and progress.completed)
+
+        # Video Watch Progress: count total accumulated playback time
+        current_play_time = max(
+            progress.video_play_time_seconds if progress else 0.0,
+            progress.watched_seconds if progress else 0.0,
+            float(video_play_time_seconds or 0.0),
+            float(watched_seconds or 0.0),
+        )
+
+        # Active Screen Time: only when video is in PLAYING state and tab is focused/visible
+        current_active_time = max(
+            progress.active_screen_time_seconds if progress else 0.0,
+            float(active_screen_time_seconds or 0.0),
+        )
 
         if eff_duration > 0:
-            watch_ratio = unique_watched / eff_duration
-            meets_threshold = watch_ratio >= (threshold_pct / 100.0)
-            current_active_time = max(
-                progress.active_screen_time_seconds if progress else 0.0,
-                float(active_screen_time_seconds or 0.0),
-            )
-            meets_active_threshold = current_active_time >= eff_duration * 0.6
-            is_now_completed = is_already_done or (meets_threshold and meets_active_threshold)
-            calculated_pct = min(100.0, round(watch_ratio * 100.0, 1))
-            final_pct = 100.0 if is_now_completed else calculated_pct
+            # Video watch percentage = total accumulated playback time / lecture duration
+            watch_ratio = current_play_time / eff_duration
+            watch_pct = min(100.0, round(watch_ratio * 100.0, 1))
+
+            # Active screen time requirement is at least 60% of lecture duration
+            meets_active_threshold = current_active_time >= (eff_duration * 0.6)
+
+            # Video watch percentage must be >= admin-configured threshold
+            meets_watch_threshold = watch_pct >= threshold_pct
+
+            # Both conditions must be satisfied (AND logic)
+            is_now_completed = is_already_done or (meets_watch_threshold and meets_active_threshold)
+            final_pct = 100.0 if is_now_completed else watch_pct
         else:
-            # If duration is 0 or unknown, cannot validate completion
             is_now_completed = is_already_done
             final_pct = 100.0 if is_now_completed else 0.0
 
@@ -150,13 +158,13 @@ class ProgressService:
             progress = LectureProgress(
                 student_id=student_id,
                 lecture_id=lecture_id,
-                watched_seconds=unique_watched,
-                watched_segments=json.dumps(merged),
+                watched_seconds=current_play_time,
+                watched_segments="[]",
                 completion_percentage=final_pct,
                 last_position_seconds=last_position_seconds,
-                youtube_play_time_seconds=0.0,
-                video_play_time_seconds=max(0.0, float(video_play_time_seconds or 0.0)),
-                active_screen_time_seconds=max(0.0, float(active_screen_time_seconds or 0.0)),
+                youtube_play_time_seconds=current_play_time if lecture.video_source_type == "youtube" else 0.0,
+                video_play_time_seconds=current_play_time,
+                active_screen_time_seconds=current_active_time,
                 last_activity_at=last_activity_at or datetime.utcnow(),
                 completed=is_now_completed,
                 completed_at=datetime.utcnow() if is_now_completed else None,
@@ -164,20 +172,13 @@ class ProgressService:
             )
             db.add(progress)
         else:
-            progress.watched_seconds = unique_watched
-            progress.watched_segments = json.dumps(merged)
+            progress.watched_seconds = current_play_time
+            progress.video_play_time_seconds = current_play_time
+            if lecture.video_source_type == "youtube":
+                progress.youtube_play_time_seconds = current_play_time
+            progress.active_screen_time_seconds = current_active_time
             progress.completion_percentage = final_pct
             progress.last_position_seconds = last_position_seconds
-            progress.video_play_time_seconds = max(
-                progress.video_play_time_seconds or 0.0,
-                float(video_play_time_seconds or 0.0),
-            )
-            if lecture.video_source_type == "youtube":
-                progress.youtube_play_time_seconds = progress.video_play_time_seconds
-            progress.active_screen_time_seconds = max(
-                progress.active_screen_time_seconds or 0.0,
-                float(active_screen_time_seconds or 0.0),
-            )
             if last_activity_at:
                 progress.last_activity_at = last_activity_at
             progress.last_watched_at = datetime.utcnow()
@@ -214,7 +215,9 @@ class ProgressService:
             enrollment.status = EnrollmentStatus.IN_PROGRESS
             enrollment.started_at = enrollment.started_at or datetime.utcnow()
 
-        # Count total lectures and completed lectures for this course
+        # Count total published lectures and completed lectures for this course
+        # A lecture is completed only when `completed == True` (set by the
+        # tracking system which enforces both watch threshold AND active screen time).
         stmt_lectures = (
             select(Lecture)
             .join(Module, Lecture.module_id == Module.id)
@@ -229,7 +232,7 @@ class ProgressService:
                 and_(
                     LectureProgress.student_id == student_id,
                     LectureProgress.lecture_id.in_(lec_ids),
-                    (LectureProgress.completed == True) | (LectureProgress.completion_percentage >= 100.0),
+                    LectureProgress.completed == True,
                 )
             )
             res_prog = await db.execute(stmt_prog)
@@ -237,7 +240,7 @@ class ProgressService:
             pct = round((completed_count / len(all_lectures)) * 100, 1)
             enrollment.progress_percentage = pct
 
-        # Check if course is fully completed
+        # Attempt course completion via centralized eligibility
         await ProgressService.check_and_complete_course(db, student_id, course_id)
         await db.commit()
 
@@ -311,7 +314,18 @@ class ProgressService:
             for l_idx, lec in enumerate(sorted_lectures):
                 total_lectures += 1
                 lp = lp_map.get(lec.id)
-                is_completed = (lp.completed or (lp.completion_percentage >= 100.0)) if lp else False
+
+                # Use the centralized completion check from EligibilityService
+                from app.services.eligibility_service import EligibilityService
+                is_completed = EligibilityService._is_lecture_completed(lec, lp)
+
+                # Auto-reconcile: if our check says completed but DB flag is not set, update it
+                if lp and is_completed and not lp.completed:
+                    lp.completed = True
+                    lp.completed_at = lp.completed_at or datetime.utcnow()
+                    lp.completion_percentage = 100.0
+                    db.add(lp)
+
                 if is_completed:
                     completed_lectures += 1
 
@@ -341,13 +355,14 @@ class ProgressService:
                     "is_completed": is_completed,
                     "lock_reason": lock_reason,
                     "order_index": lec.order_index,
+                    "completion_threshold": lec.completion_threshold or 90.0,
                     "progress": {
-                        "watched_seconds": lp.watched_seconds if lp else 0,
+                        "watched_seconds": (lp.video_play_time_seconds or lp.watched_seconds) if lp else 0,
                         "completion_percentage": 100.0 if is_completed else (lp.completion_percentage if lp else 0),
                         "last_position_seconds": lp.last_position_seconds if lp else 0,
-                        "unique_watched_seconds": lp.watched_seconds if lp else 0,
-                        "video_play_time_seconds": lp.video_play_time_seconds if lp else 0,
-                        "watched_segments": json.loads(lp.watched_segments) if lp and lp.watched_segments else [],
+                        "unique_watched_seconds": (lp.video_play_time_seconds or lp.watched_seconds) if lp else 0,
+                        "video_play_time_seconds": (lp.video_play_time_seconds or lp.watched_seconds) if lp else 0,
+                        "watched_segments": [],
                         "active_screen_time_seconds": lp.active_screen_time_seconds if lp else 0,
                         "last_activity_at": lp.last_activity_at if lp else None,
                     } if lp else None
@@ -430,6 +445,14 @@ class ProgressService:
 
         enrollment = await ProgressService.get_or_create_enrollment(db, student_id, course_id)
 
+        # Run centralized eligibility check and attempt course completion
+        from app.services.eligibility_service import eligibility_service
+        eligibility = await eligibility_service.complete_course_if_eligible(
+            db, student_id, course_id
+        )
+        # Refresh enrollment to get updated status
+        await db.refresh(enrollment)
+
         return {
             "enrollment": enrollment,
             "modules": modules_status,
@@ -438,6 +461,7 @@ class ProgressService:
             "completed_lectures": completed_lectures,
             "current_module": current_module_title,
             "current_item": current_item_title,
+            "eligibility": eligibility.to_dict(),
         }
 
     @staticmethod
@@ -445,83 +469,15 @@ class ProgressService:
         db: AsyncSession, student_id: int, course_id: int
     ) -> bool:
         """
-        Requirements from Section 19:
-        - All required lectures completed
-        - All required module quizzes passed
-        - Final assessment passed (if exists) at required passing percentage
+        Uses the centralized EligibilityService to determine if the course
+        is complete. If eligible, marks the enrollment as COMPLETED and
+        issues a certificate. Returns True if the course is now complete.
         """
-        enrollment = await ProgressService.get_or_create_enrollment(db, student_id, course_id)
-        if enrollment.status == EnrollmentStatus.COMPLETED:
-            return True
-
-        # Check all published required lectures
-        stmt_lec = (
-            select(Lecture)
-            .join(Module, Lecture.module_id == Module.id)
-            .where(
-                and_(
-                    Module.course_id == course_id,
-                    Lecture.is_published == True,
-                    Lecture.is_required == True,
-                )
-            )
+        from app.services.eligibility_service import eligibility_service
+        eligibility = await eligibility_service.complete_course_if_eligible(
+            db, student_id, course_id
         )
-        res_lec = await db.execute(stmt_lec)
-        lectures = res_lec.scalars().all()
-
-        if lectures:
-            lec_ids = [l.id for l in lectures]
-            stmt_prog = select(LectureProgress).where(
-                and_(
-                    LectureProgress.student_id == student_id,
-                    LectureProgress.lecture_id.in_(lec_ids),
-                    (LectureProgress.completed == True) | (LectureProgress.completion_percentage >= 100.0),
-                )
-            )
-            res_prog = await db.execute(stmt_prog)
-            completed_lec_ids = {p.lecture_id for p in res_prog.scalars().all()}
-            if len(completed_lec_ids) < len(lec_ids):
-                return False
-
-        # Check all required quizzes
-        stmt_qz = (
-            select(Quiz)
-            .outerjoin(Module, Quiz.module_id == Module.id)
-            .where(
-                and_(
-                    (Module.course_id == course_id) | (Quiz.course_id == course_id),
-                    Quiz.is_published == True,
-                    Quiz.is_required == True,
-                )
-            )
-        )
-        res_qz = await db.execute(stmt_qz)
-        quizzes = res_qz.scalars().all()
-
-        if quizzes:
-            quiz_ids = [q.id for q in quizzes]
-            stmt_qa = select(QuizAttempt).where(
-                and_(
-                    QuizAttempt.student_id == student_id,
-                    QuizAttempt.quiz_id.in_(quiz_ids),
-                    QuizAttempt.passed == True,
-                )
-            )
-            res_qa = await db.execute(stmt_qa)
-            passed_quiz_ids = {a.quiz_id for a in res_qa.scalars().all()}
-            if len(passed_quiz_ids) < len(quiz_ids):
-                return False
-
-        # If we reached here, student completed the course!
-        enrollment.status = EnrollmentStatus.COMPLETED
-        enrollment.progress_percentage = 100.0
-        enrollment.completed_at = datetime.utcnow()
-        await db.commit()
-
-        # Automatically issue certificate if not already issued
-        from app.services.certificate_service import CertificateService
-        await CertificateService.issue_certificate_if_eligible(db, student_id, course_id)
-        return True
+        return eligibility.eligible
 
 
 progress_service = ProgressService()

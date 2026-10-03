@@ -134,11 +134,16 @@ export default function CourseLearningPage() {
         return {
           ...prev,
           is_completed: isCompleted || prev.is_completed,
-          progress: {
-            watched_seconds: prev.progress?.watched_seconds || 0,
-            last_position_seconds: prev.progress?.last_position_seconds || 0,
-            completion_percentage: effectivePct,
-          },
+          progress: prev.progress
+            ? {
+                ...prev.progress,
+                completion_percentage: effectivePct,
+              }
+            : {
+                watched_seconds: 0,
+                last_position_seconds: 0,
+                completion_percentage: effectivePct,
+              },
         };
       });
 
@@ -345,10 +350,26 @@ export default function CourseLearningPage() {
                 <span>Download Certificate</span>
               </Button>
             </a>
+          ) : curriculum.eligibility && !curriculum.eligibility.eligible ? (
+            <div
+              className="hidden md:flex items-center gap-1.5 text-[11px] text-text-muted border border-border-subtle px-2.5 py-1.5 rounded-md bg-[#F7F8FA] cursor-help"
+              title={curriculum.eligibility.missing_requirements.join('\n') || 'Complete all requirements'}
+            >
+              <Award className="w-3.5 h-3.5 text-text-muted" />
+              <span>
+                {curriculum.eligibility.lectures.remaining > 0
+                  ? `${curriculum.eligibility.lectures.remaining} lecture${curriculum.eligibility.lectures.remaining > 1 ? 's' : ''} remaining`
+                  : curriculum.eligibility.module_quizzes.remaining > 0
+                  ? `${curriculum.eligibility.module_quizzes.remaining} quiz${curriculum.eligibility.module_quizzes.remaining > 1 ? 'zes' : ''} remaining`
+                  : curriculum.eligibility.final_assessment.remaining > 0
+                  ? 'Final assessment required'
+                  : 'Certificate on completion'}
+              </span>
+            </div>
           ) : (
             <div className="hidden md:flex items-center gap-1.5 text-[11px] text-text-muted border border-border-subtle px-2.5 py-1.5 rounded-md bg-[#F7F8FA]">
               <Award className="w-3.5 h-3.5 text-text-muted" />
-              <span>Certificate at 100%</span>
+              <span>Certificate on completion</span>
             </div>
           )}
         </div>
@@ -373,6 +394,8 @@ export default function CourseLearningPage() {
                 }
                 videoSourceType={selectedItem.video_source_type}
                 videoId={selectedItem.video_id}
+                completionThreshold={selectedItem.completion_threshold}
+                duration={selectedItem.duration}
                 initialPosition={
                   selectedItem.progress?.last_position_seconds || 0
                 }
@@ -381,12 +404,13 @@ export default function CourseLearningPage() {
                     ? 100
                     : selectedItem.progress?.completion_percentage || 0
                 }
-                initialSegments={selectedItem.progress?.watched_segments || []}
                 initialActiveScreenTime={
                   selectedItem.progress?.active_screen_time_seconds || 0
                 }
                 initialVideoPlayTime={
-                  selectedItem.progress?.video_play_time_seconds || 0
+                  selectedItem.progress?.video_play_time_seconds ||
+                  selectedItem.progress?.watched_seconds ||
+                  0
                 }
                 isCompleted={selectedItem.is_completed}
                 onCompleted={handleLectureCompleted}
@@ -467,8 +491,8 @@ export default function CourseLearningPage() {
                   />
                   <div className="text-[11px] text-text-muted">
                     {selectedItem.is_completed
-                      ? "Completed (100% watched) — next items unlocked."
-                      : "Watch to completion to unlock the next lecture."}
+                      ? "Completed — next items unlocked."
+                      : `Watch at least ${selectedItem.completion_threshold ?? 90}% and maintain 60% active screen time to unlock the next lecture.`}
                   </div>
                 </div>
               </div>

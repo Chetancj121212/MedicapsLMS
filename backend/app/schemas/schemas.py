@@ -400,6 +400,7 @@ class LectureProgressResponse(BaseModel):
     video_play_time_seconds: float = 0.0
     unique_watched_seconds: float = 0.0
     active_screen_time_seconds: float = 0.0
+    completion_threshold: float = 90.0
     last_activity_at: Optional[datetime] = None
 
     @field_validator("watched_segments", mode="before")

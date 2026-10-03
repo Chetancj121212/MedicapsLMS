@@ -42,7 +42,7 @@ from app.schemas.schemas import (
 )
 from app.services.auth_service import require_admin, hash_password
 from app.services.storage.local import storage_service
-from app.utils.video import detect_video_source, get_mp4_duration
+from app.utils.video import detect_video_source, get_mp4_duration, get_youtube_duration
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"], dependencies=[Depends(require_admin)])
 
@@ -302,6 +302,12 @@ async def add_lecture(
             video_source_type, video_id = detect_video_source(video_url_path)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        if video_source_type == "youtube" and video_id:
+            yt_dur = get_youtube_duration(video_id)
+            if yt_dur and yt_dur > 0:
+                if duration is None or duration == 300.0 or duration <= 0:
+                    duration = round(yt_dur, 1)
     if video_file and video_file.filename:
         # Validate format
         if not video_file.filename.lower().endswith(".mp4"):
@@ -372,6 +378,11 @@ async def update_lecture(
         lec.video_source_url = data.video_source_url
         lec.video_path = data.video_source_url
         lec.video_id = video_id
+        if source_type == "youtube" and video_id:
+            yt_dur = get_youtube_duration(video_id)
+            if yt_dur and yt_dur > 0:
+                if data.duration is None or data.duration == 300.0 or data.duration <= 0:
+                    lec.duration = round(yt_dur, 1)
 
     await db.commit()
     await db.refresh(lec)
