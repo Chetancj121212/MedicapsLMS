@@ -93,7 +93,8 @@ export default function AdminStudentDetailPage() {
   const [enrolling, setEnrolling] = useState(false);
 
   // Edit Enrollment Modal State
-  const [editingEnrollment, setEditingEnrollment] = useState<StudentEnrollment | null>(null);
+  const [editingEnrollment, setEditingEnrollment] =
+    useState<StudentEnrollment | null>(null);
   const [editEnrollStatus, setEditEnrollStatus] = useState("ENROLLED");
   const [editEnrollProgress, setEditEnrollProgress] = useState("0");
   const [savingEnrollment, setSavingEnrollment] = useState(false);
@@ -105,7 +106,9 @@ export default function AdminStudentDetailPage() {
 
   const loadStudent = useCallback(async () => {
     try {
-      const data = (await fetchApi(`/api/admin/students/${studentId}`)) as StudentDetail;
+      const data = (await fetchApi(
+        `/api/admin/students/${studentId}`,
+      )) as StudentDetail;
       setStudent(data);
     } catch (err) {
       console.error("Failed to load student details:", err);
@@ -133,8 +136,10 @@ export default function AdminStudentDetailPage() {
       return;
     }
     if (user && user.role !== "STUDENT" && studentId) {
-      loadStudent();
-      loadCourses();
+      void Promise.resolve().then(() => {
+        loadStudent();
+        loadCourses();
+      });
     }
   }, [user, authLoading, studentId, router, loadStudent, loadCourses]);
 
@@ -169,7 +174,9 @@ export default function AdminStudentDetailPage() {
       setShowEditModal(false);
       await loadStudent();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to update student profile");
+      alert(
+        err instanceof Error ? err.message : "Failed to update student profile",
+      );
     } finally {
       setSavingStudent(false);
     }
@@ -179,7 +186,7 @@ export default function AdminStudentDetailPage() {
     if (!student) return;
     if (
       !confirm(
-        `Are you sure you want to permanently delete student "${student.full_name} (${student.enrollment_number})"?\n\nThis removes their login credentials, progress, and all certificates.`
+        `Are you sure you want to permanently delete student "${student.full_name} (${student.enrollment_number})"?\n\nThis removes their login credentials, progress, and all certificates.`,
       )
     ) {
       return;
@@ -240,7 +247,12 @@ export default function AdminStudentDetailPage() {
   };
 
   const handleUnenrollCourse = async (enrId: number, courseTitle: string) => {
-    if (!confirm(`Are you sure you want to unenroll student from "${courseTitle}"?`)) return;
+    if (
+      !confirm(
+        `Are you sure you want to unenroll student from "${courseTitle}"?`,
+      )
+    )
+      return;
     try {
       await fetchApi(`/api/admin/enrollments/${enrId}`, { method: "DELETE" });
       await loadStudent();
@@ -272,12 +284,19 @@ export default function AdminStudentDetailPage() {
   };
 
   const handleDeleteCertificate = async (certId: number, certNum: string) => {
-    if (!confirm(`Are you sure you want to permanently delete certificate ${certNum}?`)) return;
+    if (
+      !confirm(
+        `Are you sure you want to permanently delete certificate ${certNum}?`,
+      )
+    )
+      return;
     try {
       await fetchApi(`/api/admin/certificates/${certId}`, { method: "DELETE" });
       await loadStudent();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to delete certificate");
+      alert(
+        err instanceof Error ? err.message : "Failed to delete certificate",
+      );
     }
   };
 
@@ -312,7 +331,9 @@ export default function AdminStudentDetailPage() {
             <span className="text-xs font-semibold uppercase tracking-wider text-primary">
               ECE Student Profile
             </span>
-            <h1 className="text-2xl font-semibold text-text-primary tracking-tight">{student.full_name}</h1>
+            <h1 className="text-2xl font-semibold text-text-primary tracking-tight">
+              {student.full_name}
+            </h1>
             <div className="flex flex-wrap items-center gap-3 text-xs text-text-secondary pt-1">
               <span className="font-mono font-medium text-text-primary bg-[#F0F3F8] px-2 py-0.5 rounded">
                 Enrollment: {student.enrollment_number}
@@ -354,7 +375,9 @@ export default function AdminStudentDetailPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold text-text-primary">Enrolled Courses & Progress</h2>
+            <h2 className="text-base font-semibold text-text-primary">
+              Enrolled Courses & Progress
+            </h2>
             <Badge variant="secondary" className="text-xs">
               {student.enrollments?.length || 0}
             </Badge>
@@ -374,17 +397,30 @@ export default function AdminStudentDetailPage() {
           <div className="p-8 text-center text-xs text-text-muted bg-white rounded-xl border border-border-subtle space-y-2">
             <BookOpen className="w-8 h-8 text-slate-300 mx-auto" />
             <div>Student is not currently enrolled in any courses.</div>
-            <Button size="sm" variant="outline" onClick={() => setShowEnrollModal(true)} className="text-xs mt-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowEnrollModal(true)}
+              className="text-xs mt-2"
+            >
               + Enroll First Course
             </Button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {student.enrollments?.map((e: StudentEnrollment) => (
-              <Card key={e.id} className="p-4 border-border-subtle space-y-3 shadow-xs">
+              <Card
+                key={e.id}
+                className="p-4 border-border-subtle space-y-3 shadow-xs"
+              >
                 <div className="flex justify-between items-start gap-2">
-                  <h3 className="text-sm font-semibold text-text-primary line-clamp-1">{e.course_title}</h3>
-                  <Badge variant={e.status === "COMPLETED" ? "success" : "secondary"} className="text-[10px] shrink-0">
+                  <h3 className="text-sm font-semibold text-text-primary line-clamp-1">
+                    {e.course_title}
+                  </h3>
+                  <Badge
+                    variant={e.status === "COMPLETED" ? "success" : "secondary"}
+                    className="text-[10px] shrink-0"
+                  >
                     {e.status}
                   </Badge>
                 </div>
@@ -392,11 +428,15 @@ export default function AdminStudentDetailPage() {
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs text-text-secondary">
                     <span>Progress</span>
-                    <span className="font-semibold text-primary">{Math.round(e.progress_percentage)}%</span>
+                    <span className="font-semibold text-primary">
+                      {Math.round(e.progress_percentage)}%
+                    </span>
                   </div>
                   <Progress
                     value={e.progress_percentage}
-                    indicatorColor={e.status === "COMPLETED" ? "bg-emerald-600" : "bg-primary"}
+                    indicatorColor={
+                      e.status === "COMPLETED" ? "bg-emerald-600" : "bg-primary"
+                    }
                   />
                 </div>
 
@@ -431,7 +471,9 @@ export default function AdminStudentDetailPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold text-text-primary">Issued Certificates</h2>
+            <h2 className="text-base font-semibold text-text-primary">
+              Issued Certificates
+            </h2>
             <Badge variant="success" className="text-xs">
               {student.certificates?.length || 0}
             </Badge>
@@ -450,27 +492,47 @@ export default function AdminStudentDetailPage() {
 
         {student.certificates?.length === 0 ? (
           <div className="p-8 text-center text-xs text-text-muted bg-white rounded-xl border border-border-subtle">
-            No certificates issued yet. Certificates are automatically awarded on course completion or can be manually issued above.
+            No certificates issued yet. Certificates are automatically awarded
+            on course completion or can be manually issued above.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {student.certificates?.map((c: StudentCertificate) => (
-              <Card key={c.id} className="p-4 border-border-subtle flex flex-col justify-between gap-3 shadow-xs">
+              <Card
+                key={c.id}
+                className="p-4 border-border-subtle flex flex-col justify-between gap-3 shadow-xs"
+              >
                 <div className="flex justify-between items-start gap-2">
                   <div>
-                    <div className="font-mono text-xs font-bold text-[#142250]">{c.certificate_number}</div>
-                    <div className="text-xs font-semibold text-slate-800 mt-0.5">{c.course_title}</div>
-                    <div className="text-[11px] text-slate-400 mt-1">Issued: {c.issued_at}</div>
+                    <div className="font-mono text-xs font-bold text-[#142250]">
+                      {c.certificate_number}
+                    </div>
+                    <div className="text-xs font-semibold text-slate-800 mt-0.5">
+                      {c.course_title}
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-1">
+                      Issued: {c.issued_at}
+                    </div>
                   </div>
 
-                  <Badge variant={c.is_revoked ? "destructive" : "success"} className="text-[10px]">
+                  <Badge
+                    variant={c.is_revoked ? "destructive" : "success"}
+                    className="text-[10px]"
+                  >
                     {c.is_revoked ? "Revoked" : "Active"}
                   </Badge>
                 </div>
 
                 <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-100">
-                  <Link href={`/verify/${c.certificate_number}`} target="_blank">
-                    <Button size="sm" variant="outline" className="text-xs h-7 px-2 gap-1">
+                  <Link
+                    href={`/verify/${c.certificate_number}`}
+                    target="_blank"
+                  >
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7 px-2 gap-1"
+                    >
                       <span>Verify</span>
                       <ExternalLink className="w-3 h-3" />
                     </Button>
@@ -479,7 +541,9 @@ export default function AdminStudentDetailPage() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => handleDeleteCertificate(c.id, c.certificate_number)}
+                    onClick={() =>
+                      handleDeleteCertificate(c.id, c.certificate_number)
+                    }
                     className="text-xs h-7 px-2 text-rose-600 hover:bg-rose-50"
                   >
                     <Trash2 className="w-3 h-3" />
@@ -493,7 +557,9 @@ export default function AdminStudentDetailPage() {
 
       {/* Quiz Attempt History */}
       <div className="space-y-4">
-        <h2 className="text-base font-semibold text-text-primary">Assessment Attempt History</h2>
+        <h2 className="text-base font-semibold text-text-primary">
+          Assessment Attempt History
+        </h2>
 
         {student.quiz_attempts?.length === 0 ? (
           <div className="p-6 text-center text-xs text-slate-400 bg-white rounded-xl border border-border-subtle">
@@ -514,14 +580,23 @@ export default function AdminStudentDetailPage() {
               <tbody className="divide-y divide-slate-100">
                 {student.quiz_attempts?.map((a: QuizAttempt) => (
                   <tr key={a.id} className="hover:bg-slate-50">
-                    <td className="p-3 font-medium text-slate-800">{a.quiz_title}</td>
-                    <td className="p-3 text-center font-mono">Attempt {a.attempt_number}</td>
+                    <td className="p-3 font-medium text-slate-800">
+                      {a.quiz_title}
+                    </td>
+                    <td className="p-3 text-center font-mono">
+                      Attempt {a.attempt_number}
+                    </td>
                     <td className="p-3 text-center font-semibold">
                       {a.score} / {a.total_marks}
                     </td>
-                    <td className="p-3 text-center font-bold">{a.percentage}%</td>
+                    <td className="p-3 text-center font-bold">
+                      {a.percentage}%
+                    </td>
                     <td className="p-3 text-center">
-                      <Badge variant={a.passed ? "success" : "destructive"} className="text-[10px]">
+                      <Badge
+                        variant={a.passed ? "success" : "destructive"}
+                        className="text-[10px]"
+                      >
                         {a.passed ? "Passed" : "Failed"}
                       </Badge>
                     </td>
@@ -538,8 +613,13 @@ export default function AdminStudentDetailPage() {
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">Edit Student Profile</h3>
-              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">
+              <h3 className="text-base font-bold text-slate-900">
+                Edit Student Profile
+              </h3>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold"
+              >
                 ✕
               </button>
             </div>
@@ -556,7 +636,9 @@ export default function AdminStudentDetailPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-medium text-text-primary">Email Address</label>
+                <label className="font-medium text-text-primary">
+                  Email Address
+                </label>
                 <Input
                   type="email"
                   value={editEmail}
@@ -566,7 +648,9 @@ export default function AdminStudentDetailPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-medium text-text-primary">Department</label>
+                <label className="font-medium text-text-primary">
+                  Department
+                </label>
                 <Input
                   value={editDept}
                   onChange={(e) => setEditDept(e.target.value)}
@@ -576,7 +660,9 @@ export default function AdminStudentDetailPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="font-medium text-text-primary">Program</label>
+                  <label className="font-medium text-text-primary">
+                    Program
+                  </label>
                   <Input
                     value={editProgram}
                     onChange={(e) => setEditProgram(e.target.value)}
@@ -585,7 +671,9 @@ export default function AdminStudentDetailPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-medium text-text-primary">Semester</label>
+                  <label className="font-medium text-text-primary">
+                    Semester
+                  </label>
                   <Input
                     type="number"
                     min="1"
@@ -598,7 +686,9 @@ export default function AdminStudentDetailPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-medium text-text-primary">Academic Year</label>
+                <label className="font-medium text-text-primary">
+                  Academic Year
+                </label>
                 <Input
                   value={editAcaYear}
                   onChange={(e) => setEditAcaYear(e.target.value)}
@@ -607,10 +697,18 @@ export default function AdminStudentDetailPage() {
               </div>
 
               <div className="flex justify-end gap-3 pt-3 border-t border-border-subtle">
-                <Button type="button" variant="outline" onClick={() => setShowEditModal(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowEditModal(false)}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" isLoading={savingStudent} className="bg-primary text-white font-semibold">
+                <Button
+                  type="submit"
+                  isLoading={savingStudent}
+                  className="bg-primary text-white font-semibold"
+                >
                   Save Changes
                 </Button>
               </div>
@@ -624,15 +722,22 @@ export default function AdminStudentDetailPage() {
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">Enroll Student in Course</h3>
-              <button onClick={() => setShowEnrollModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">
+              <h3 className="text-base font-bold text-slate-900">
+                Enroll Student in Course
+              </h3>
+              <button
+                onClick={() => setShowEnrollModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold"
+              >
                 ✕
               </button>
             </div>
 
             <form onSubmit={handleEnrollCourse} className="space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="font-bold text-slate-700">Select Academic Course *</label>
+                <label className="font-bold text-slate-700">
+                  Select Academic Course *
+                </label>
                 <select
                   value={selectedCourseId}
                   onChange={(e) => setSelectedCourseId(e.target.value)}
@@ -648,10 +753,18 @@ export default function AdminStudentDetailPage() {
               </div>
 
               <div className="flex justify-end gap-3 pt-3 border-t border-border-subtle">
-                <Button type="button" variant="outline" onClick={() => setShowEnrollModal(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowEnrollModal(false)}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" isLoading={enrolling} className="bg-primary text-white font-semibold">
+                <Button
+                  type="submit"
+                  isLoading={enrolling}
+                  className="bg-primary text-white font-semibold"
+                >
                   Confirm Enrollment
                 </Button>
               </div>
@@ -666,17 +779,26 @@ export default function AdminStudentDetailPage() {
           <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Edit Enrollment Status</h3>
-                <p className="text-xs text-slate-500 font-medium">{editingEnrollment.course_title}</p>
+                <h3 className="text-base font-bold text-slate-900">
+                  Edit Enrollment Status
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  {editingEnrollment.course_title}
+                </p>
               </div>
-              <button onClick={() => setEditingEnrollment(null)} className="text-slate-400 hover:text-slate-600 font-bold">
+              <button
+                onClick={() => setEditingEnrollment(null)}
+                className="text-slate-400 hover:text-slate-600 font-bold"
+              >
                 ✕
               </button>
             </div>
 
             <form onSubmit={handleSaveEnrollment} className="space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="font-bold text-slate-700">Enrollment Status *</label>
+                <label className="font-bold text-slate-700">
+                  Enrollment Status *
+                </label>
                 <select
                   value={editEnrollStatus}
                   onChange={(e) => setEditEnrollStatus(e.target.value)}
@@ -689,7 +811,9 @@ export default function AdminStudentDetailPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-slate-700">Progress Percentage (0 - 100%)</label>
+                <label className="font-bold text-slate-700">
+                  Progress Percentage (0 - 100%)
+                </label>
                 <Input
                   type="number"
                   min="0"
@@ -702,10 +826,18 @@ export default function AdminStudentDetailPage() {
               </div>
 
               <div className="flex justify-end gap-3 pt-3 border-t border-border-subtle">
-                <Button type="button" variant="outline" onClick={() => setEditingEnrollment(null)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditingEnrollment(null)}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" isLoading={savingEnrollment} className="bg-primary text-white font-semibold">
+                <Button
+                  type="submit"
+                  isLoading={savingEnrollment}
+                  className="bg-primary text-white font-semibold"
+                >
                   Update Enrollment
                 </Button>
               </div>
@@ -719,15 +851,24 @@ export default function AdminStudentDetailPage() {
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">Issue Academic Certificate</h3>
-              <button onClick={() => setShowIssueCertModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">
+              <h3 className="text-base font-bold text-slate-900">
+                Issue Academic Certificate
+              </h3>
+              <button
+                onClick={() => setShowIssueCertModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold"
+              >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleIssueCertificate} className="space-y-4 text-xs">
+            <form
+              onSubmit={handleIssueCertificate}
+              className="space-y-4 text-xs"
+            >
               <p className="text-slate-600">
-                Issuing certificate for <strong>{student.full_name}</strong> ({student.enrollment_number}).
+                Issuing certificate for <strong>{student.full_name}</strong> (
+                {student.enrollment_number}).
               </p>
 
               <div className="space-y-1">
@@ -747,10 +888,18 @@ export default function AdminStudentDetailPage() {
               </div>
 
               <div className="flex justify-end gap-3 pt-3 border-t border-border-subtle">
-                <Button type="button" variant="outline" onClick={() => setShowIssueCertModal(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowIssueCertModal(false)}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" isLoading={issuingCert} className="bg-emerald-700 text-white font-semibold">
+                <Button
+                  type="submit"
+                  isLoading={issuingCert}
+                  className="bg-emerald-700 text-white font-semibold"
+                >
                   Generate & Issue Certificate
                 </Button>
               </div>

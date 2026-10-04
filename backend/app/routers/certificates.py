@@ -12,7 +12,7 @@ from app.database import get_db
 from app.models.certificate import Certificate
 from app.models.student import Student
 from app.models.user import User
-from app.services.auth_service import get_current_user
+from app.services.auth_service import require_student
 from app.services.certificate_service import certificate_service
 
 router = APIRouter(prefix="/api/certificates", tags=["Certificates"])
@@ -27,7 +27,7 @@ async def verify_certificate(certificate_number: str, db: AsyncSession = Depends
 
 @router.get("/my-certificates")
 async def get_my_certificates(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
     """Returns all certificates earned by the currently logged-in student."""

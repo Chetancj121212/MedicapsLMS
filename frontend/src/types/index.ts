@@ -1,4 +1,6 @@
 export type UserRole =
+  | "MASTER_ADMIN"
+  | "ADMIN"
   | "SUPER_ADMIN"
   | "DEPARTMENT_ADMIN"
   | "COURSE_INSTRUCTOR"
@@ -9,7 +11,21 @@ export interface User {
   username: string;
   role: UserRole;
   is_active: boolean;
+  full_name?: string;
+  email?: string;
+  department?: string;
   student?: StudentProfile;
+}
+
+export interface ManagedAdmin {
+  id: number;
+  full_name?: string;
+  email?: string;
+  username: string;
+  department?: string;
+  role: UserRole;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface StudentProfile {

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, Cpu, ShieldCheck } from "lucide-react";
+import { ChevronRight, Cpu } from "lucide-react";
 import { CourseListItem } from "@/types";
 import { Button } from "@/components/ui/Button";
 import {
@@ -82,7 +82,6 @@ export function CourseCard({
 
       <CardFooter className="pt-2 pb-3 px-4 border-t border-border-subtle flex items-center justify-between">
         <div className="flex items-center gap-1 text-[11px] text-primary font-medium">
-          <ShieldCheck className="w-3.5 h-3.5 text-primary" />
           <span>{certificateLabel}</span>
         </div>
         <Link href={`/courses/${course.id}`}>

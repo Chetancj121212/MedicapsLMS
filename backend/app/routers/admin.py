@@ -19,8 +19,9 @@ from app.models.lecture import Lecture
 from app.models.quiz import Quiz
 from app.models.question import Question, QuestionType, QuizOption
 from app.models.enrollment import Enrollment, EnrollmentStatus
-from app.models.progress import QuizAttempt, LectureProgress
+from app.models.progress import QuizAttempt, QuizAnswer, LectureProgress
 from app.models.certificate import Certificate
+from app.models.audit import AuditLog
 from app.schemas.schemas import (
     CourseCreate,
     CourseUpdate,
@@ -40,11 +41,20 @@ from app.schemas.schemas import (
     AdminEnrollmentUpdate,
     AdminIssueCertificateRequest,
 )
-from app.services.auth_service import require_admin, hash_password
+from app.services.auth_service import require_content_admin, hash_password
 from app.services.storage.local import storage_service
 from app.utils.video import detect_video_source, get_mp4_duration, get_youtube_duration
 
-router = APIRouter(prefix="/api/admin", tags=["Admin"], dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/api/admin", tags=["Admin"], dependencies=[Depends(require_content_admin)])
+
+
+def record_admin_audit(db: AsyncSession, actor: User, action: str, record: str, metadata: Optional[dict] = None):
+    db.add(AuditLog(
+        actor_user_id=actor.id,
+        action=action,
+        affected_record=record,
+        metadata_json=metadata or {},
+    ))
 
 
 # ─── Dashboard ───────────────────────────────────────────────────────────────
@@ -183,7 +193,12 @@ async def get_course_for_builder(course_id: int, db: AsyncSession = Depends(get_
 
 
 @router.put("/courses/{course_id}")
-async def update_course(course_id: int, data: CourseUpdate, db: AsyncSession = Depends(get_db)):
+async def update_course(
+    course_id: int,
+    data: CourseUpdate,
+    current_user: User = Depends(require_content_admin),
+    db: AsyncSession = Depends(get_db),
+):
     course = (await db.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
@@ -207,6 +222,7 @@ async def update_course(course_id: int, data: CourseUpdate, db: AsyncSession = D
                 course.published_at = datetime.utcnow()
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid course status")
+        record_admin_audit(db, current_user, f"COURSE_{data.status}", f"course:{course.id}")
 
     await db.commit()
     await db.refresh(course)
@@ -741,7 +757,11 @@ async def get_student_detail(student_id: int, db: AsyncSession = Depends(get_db)
 
 
 @router.post("/students")
-async def create_student(data: StudentCreate, db: AsyncSession = Depends(get_db)):
+async def create_student(
+    data: StudentCreate,
+    current_user: User = Depends(require_content_admin),
+    db: AsyncSession = Depends(get_db),
+):
     # Check duplicate enrollment number
     exist_stud = await db.execute(
         select(Student).where(Student.enrollment_number == data.enrollment_number)
@@ -780,6 +800,7 @@ async def create_student(data: StudentCreate, db: AsyncSession = Depends(get_db)
     db.add(student)
     await db.commit()
     await db.refresh(student)
+    record_admin_audit(db, current_user, "STUDENT_CREATED", f"student:{student.id}", {"username": user.username})
     return student
 
 
@@ -787,6 +808,7 @@ async def create_student(data: StudentCreate, db: AsyncSession = Depends(get_db)
 async def update_student(
     student_id: int,
     data: StudentUpdate,
+    current_user: User = Depends(require_content_admin),
     db: AsyncSession = Depends(get_db),
 ):
     student = (await db.execute(select(Student).where(Student.id == student_id))).scalar_one_or_none()
@@ -808,11 +830,16 @@ async def update_student(
 
     await db.commit()
     await db.refresh(student)
+    record_admin_audit(db, current_user, "STUDENT_UPDATED", f"student:{student.id}", {"fields": list(data.model_dump(exclude_unset=True))})
     return student
 
 
 @router.delete("/students/{student_id}")
-async def delete_student(student_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_student(
+    student_id: int,
+    current_user: User = Depends(require_content_admin),
+    db: AsyncSession = Depends(get_db),
+):
     student = (await db.execute(select(Student).where(Student.id == student_id))).scalar_one_or_none()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
@@ -847,6 +874,7 @@ async def delete_student(student_id: int, db: AsyncSession = Depends(get_db)):
         if usr:
             await db.delete(usr)
 
+    record_admin_audit(db, current_user, "STUDENT_DELETED", f"student:{student_id}")
     await db.commit()
     return {"message": "Student and associated account deleted successfully"}
 
@@ -921,6 +949,57 @@ async def delete_enrollment(enrollment_id: int, db: AsyncSession = Depends(get_d
     enr = (await db.execute(select(Enrollment).where(Enrollment.id == enrollment_id))).scalar_one_or_none()
     if not enr:
         raise HTTPException(status_code=404, detail="Enrollment not found")
+
+    lecture_ids = select(Lecture.id).join(Module, Lecture.module_id == Module.id).where(
+        Module.course_id == enr.course_id
+    )
+    quiz_ids = select(Quiz.id).where(Quiz.course_id == enr.course_id).union_all(
+        select(Quiz.id).join(Module, Quiz.module_id == Module.id).where(
+            Module.course_id == enr.course_id
+        )
+    )
+    attempt_ids = select(QuizAttempt.id).where(
+        and_(
+            QuizAttempt.student_id == enr.student_id,
+            QuizAttempt.quiz_id.in_(quiz_ids),
+        )
+    )
+
+    await db.execute(
+        QuizAnswer.__table__.delete().where(QuizAnswer.attempt_id.in_(attempt_ids))
+    )
+    await db.execute(
+        QuizAttempt.__table__.delete().where(
+            and_(
+                QuizAttempt.student_id == enr.student_id,
+                QuizAttempt.quiz_id.in_(quiz_ids),
+            )
+        )
+    )
+    await db.execute(
+        LectureProgress.__table__.delete().where(
+            and_(
+                LectureProgress.student_id == enr.student_id,
+                LectureProgress.lecture_id.in_(lecture_ids),
+            )
+        )
+    )
+
+    # An enrollment removal starts a new completion cycle. Keep certificate
+    # history for verification, but invalidate any active certificate tied to
+    # this enrollment so a later completion can issue a new one.
+    await db.execute(
+        Certificate.__table__.update()
+        .where(
+            and_(
+                Certificate.student_id == enr.student_id,
+                Certificate.course_id == enr.course_id,
+                Certificate.is_revoked == False,
+            )
+        )
+        .values(is_revoked=True, revoked_at=datetime.utcnow())
+    )
+
     await db.delete(enr)
     await db.commit()
     return {"message": "Enrollment removed successfully"}
@@ -1029,13 +1108,18 @@ async def list_all_certificates(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/certificates/{certificate_id}/revoke")
-async def toggle_revoke_certificate(certificate_id: int, db: AsyncSession = Depends(get_db)):
+async def toggle_revoke_certificate(
+    certificate_id: int,
+    current_user: User = Depends(require_content_admin),
+    db: AsyncSession = Depends(get_db),
+):
     cert = (await db.execute(select(Certificate).where(Certificate.id == certificate_id))).scalar_one_or_none()
     if not cert:
         raise HTTPException(status_code=404, detail="Certificate not found")
 
     cert.is_revoked = not cert.is_revoked
     cert.revoked_at = datetime.utcnow() if cert.is_revoked else None
+    record_admin_audit(db, current_user, "CERTIFICATE_REVOKED" if cert.is_revoked else "CERTIFICATE_RESTORED", f"certificate:{cert.id}")
     await db.commit()
     await db.refresh(cert)
 
@@ -1048,6 +1132,7 @@ async def toggle_revoke_certificate(certificate_id: int, db: AsyncSession = Depe
 @router.post("/certificates/issue")
 async def admin_issue_certificate(
     data: AdminIssueCertificateRequest,
+    current_user: User = Depends(require_content_admin),
     db: AsyncSession = Depends(get_db),
 ):
     student = (await db.execute(select(Student).where(Student.id == data.student_id))).scalar_one_or_none()
@@ -1062,6 +1147,7 @@ async def admin_issue_certificate(
     cert = await CertificateService.issue_certificate(db, student.id, course.id)
     if not cert:
         raise HTTPException(status_code=500, detail="Failed to issue certificate")
+    record_admin_audit(db, current_user, "CERTIFICATE_ISSUED", f"certificate:{cert.id}", {"student_id": student.id, "course_id": course.id})
 
     return {
         "message": "Certificate issued successfully",

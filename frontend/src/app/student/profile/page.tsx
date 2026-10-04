@@ -8,21 +8,8 @@ import { fetchApi } from "@/lib/api";
 import { getErrorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/Card";
-import {
-  User,
-  GraduationCap,
-  Mail,
-  ArrowLeft,
-  Save,
-  ShieldCheck,
-} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/Card";
+import { ArrowLeft, Save } from "lucide-react";
 
 export default function StudentProfilePage() {
   const { user, isLoading: authLoading, refreshUser } = useAuth();
@@ -40,11 +27,12 @@ export default function StudentProfilePage() {
       return;
     }
     if (user?.student) {
-      setFullName(user.student.full_name);
-      setEmail(user.student.email || "");
-      setSemester(
-        user.student.semester ? user.student.semester.toString() : "",
-      );
+      const student = user.student;
+      queueMicrotask(() => {
+        setFullName(student.full_name);
+        setEmail(student.email || "");
+        setSemester(student.semester ? student.semester.toString() : "");
+      });
     }
   }, [user, authLoading, router]);
 
@@ -113,7 +101,9 @@ export default function StudentProfilePage() {
             </div>
 
             <div className="space-y-1">
-              <label className="font-medium text-text-primary">Full Name *</label>
+              <label className="font-medium text-text-primary">
+                Full Name *
+              </label>
               <Input
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
@@ -136,7 +126,9 @@ export default function StudentProfilePage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="font-medium text-text-primary">Department</label>
+                <label className="font-medium text-text-primary">
+                  Department
+                </label>
                 <Input
                   value={user?.student?.department || "ECE"}
                   disabled
@@ -145,7 +137,9 @@ export default function StudentProfilePage() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-medium text-text-primary">Semester</label>
+                <label className="font-medium text-text-primary">
+                  Semester
+                </label>
                 <Input
                   type="number"
                   value={semester}

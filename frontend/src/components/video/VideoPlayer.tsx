@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { fetchApi } from "@/lib/api";
-import { Play } from "lucide-react";
+import { Pause, Play } from "lucide-react";
 
 interface YouTubePlayer {
   getCurrentTime?: () => number;
@@ -66,6 +66,7 @@ interface VideoPlayerProps {
   initialVideoPlayTime?: number;
   isCompleted?: boolean;
   onCompleted?: () => void;
+  onNext?: () => void;
   onProgressUpdate?: (
     percentage: number,
     completed: boolean,
@@ -104,7 +105,6 @@ export function VideoPlayer({
   videoUrl,
   videoSourceType,
   videoId,
-  completionThreshold,
   duration: initialDuration,
   initialPosition = 0,
   initialPercentage = 0,
@@ -112,28 +112,31 @@ export function VideoPlayer({
   initialVideoPlayTime = 0,
   isCompleted = false,
   onCompleted,
+  onNext,
   onProgressUpdate,
 }: VideoPlayerProps) {
   const sourceType =
     videoSourceType || (parseYoutubeId(videoUrl) ? "youtube" : "local");
   const resolvedId =
-    videoId || (sourceType === "youtube" ? parseYoutubeId(videoUrl) : null);
+    sourceType === "youtube" ? parseYoutubeId(videoId || videoUrl) : null;
+  const resumePosition = isCompleted ? 0 : initialPosition;
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<Player | null>(null);
-  const lastPositionRef = useRef(initialPosition);
+  const lastPositionRef = useRef(resumePosition);
   const activeTimeRef = useRef(initialActiveScreenTime);
   const playTimeRef = useRef(initialVideoPlayTime);
   const playingRef = useRef(false);
-  const lastTickRef = useRef(Date.now());
+  const lastTickRef = useRef<number | null>(null);
   const inFlightRef = useRef(false);
   const syncRef = useRef<(finalize?: boolean) => Promise<void>>(
     async () => undefined,
   );
   const completedRef = useRef(isCompleted);
+  const isCompletedRef = useRef(isCompleted);
+  const onNextRef = useRef(onNext);
+  const endHandledRef = useRef(false);
+  const initialPositionRef = useRef(resumePosition);
 
-  const [threshold, setThreshold] = useState<number>(
-    completionThreshold && completionThreshold > 0 ? completionThreshold : 90,
-  );
   const [duration, setDuration] = useState<number | null>(
     initialDuration && initialDuration > 0 ? initialDuration : null,
   );
@@ -146,15 +149,40 @@ export function VideoPlayer({
           ? Math.min(100, (initialVideoPlayTime / initialDuration) * 100)
           : 0,
   );
-  const [activePercentage, setActivePercentage] = useState(
-    isCompleted
-      ? 100
-      : initialDuration && initialDuration > 0
-        ? Math.min(100, (initialActiveScreenTime / initialDuration) * 100)
-        : 0,
-  );
   const [isPlaying, setIsPlaying] = useState(false);
-  const [ready, setReady] = useState(sourceType !== "youtube");
+  const [countdown, setCountdown] = useState<number | null>(null);
+
+  useEffect(() => {
+    onNextRef.current = onNext;
+  }, [onNext]);
+
+  useEffect(() => {
+    initialPositionRef.current = isCompleted ? 0 : initialPosition;
+    isCompletedRef.current = isCompleted;
+    if (isCompleted) lastPositionRef.current = 0;
+  }, [initialPosition, isCompleted]);
+
+  const handlePlaybackEnded = useCallback(() => {
+    if (endHandledRef.current) return;
+    endHandledRef.current = true;
+    void syncRef.current(true);
+    if (onNextRef.current) setCountdown(3);
+  }, []);
+
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown === 0) {
+      onNextRef.current?.();
+      queueMicrotask(() => setCountdown(null));
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setCountdown((current) => (current === null ? null : current - 1));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [countdown]);
 
   // Dynamically fetch threshold & latest progress on mount from existing API endpoint
   useEffect(() => {
@@ -170,12 +198,6 @@ export function VideoPlayer({
     }>(`/api/lectures/${lectureId}/progress`)
       .then((data) => {
         if (isCancelled || !data) return;
-        if (
-          typeof data.completion_threshold === "number" &&
-          data.completion_threshold > 0
-        ) {
-          setThreshold(data.completion_threshold);
-        }
         if (
           typeof data.video_play_time_seconds === "number" &&
           data.video_play_time_seconds > playTimeRef.current
@@ -195,14 +217,14 @@ export function VideoPlayer({
         }
         if (
           typeof data.last_position_seconds === "number" &&
-          lastPositionRef.current === 0
+          lastPositionRef.current === 0 &&
+          !isCompletedRef.current
         ) {
           lastPositionRef.current = data.last_position_seconds;
         }
         if (data.completed && !completedRef.current) {
           completedRef.current = true;
           setWatchPercentage(100);
-          setActivePercentage(100);
           onCompleted?.();
         } else if (typeof data.completion_percentage === "number") {
           setWatchPercentage(data.completion_percentage);
@@ -218,13 +240,15 @@ export function VideoPlayer({
   useEffect(() => {
     if (isCompleted) {
       completedRef.current = true;
-      setWatchPercentage(100);
-      setActivePercentage(100);
+      queueMicrotask(() => {
+        setWatchPercentage(100);
+      });
     }
   }, [isCompleted]);
 
   const sync = useCallback(
     async (finalize = false) => {
+      void finalize;
       if (inFlightRef.current) return;
       const player = playerRef.current;
       const current =
@@ -253,13 +277,6 @@ export function VideoPlayer({
           }),
         });
 
-        if (
-          response.completion_threshold &&
-          response.completion_threshold > 0
-        ) {
-          setThreshold(response.completion_threshold);
-        }
-
         const activePct = playerDuration
           ? Math.min(
               100,
@@ -272,13 +289,7 @@ export function VideoPlayer({
           : response.completion_percentage || 0;
 
         setWatchPercentage(effectiveWatchPct);
-        setActivePercentage(response.completed ? 100 : activePct);
-
-        onProgressUpdate?.(
-          effectiveWatchPct,
-          response.completed,
-          activePct,
-        );
+        onProgressUpdate?.(effectiveWatchPct, response.completed, activePct);
 
         if (response.completed && !completedRef.current) {
           completedRef.current = true;
@@ -292,7 +303,10 @@ export function VideoPlayer({
     },
     [duration, lectureId, onCompleted, onProgressUpdate],
   );
-  syncRef.current = sync;
+
+  useEffect(() => {
+    syncRef.current = sync;
+  }, [sync]);
 
   // YouTube IFrame Player
   useEffect(() => {
@@ -317,7 +331,6 @@ export function VideoPlayer({
         },
         events: {
           onReady: (event: YouTubeEvent) => {
-            setReady(true);
             const length = Number(event.target.getDuration?.() || 0);
             if (length > 0) {
               setDuration(length);
@@ -326,7 +339,9 @@ export function VideoPlayer({
               }
             }
             const resumePos =
-              initialPosition > 0 ? initialPosition : lastPositionRef.current;
+              initialPositionRef.current > 0
+                ? initialPositionRef.current
+                : lastPositionRef.current;
             if (resumePos > 0) {
               event.target.seekTo?.(resumePos, true);
             }
@@ -341,12 +356,12 @@ export function VideoPlayer({
             const playing = event.data === window.YT?.PlayerState.PLAYING;
             playingRef.current = playing;
             setIsPlaying(playing);
+            if (playing) endHandledRef.current = false;
 
             // Persist immediately on pause or end
-            if (
-              event.data === window.YT?.PlayerState.PAUSED ||
-              event.data === window.YT?.PlayerState.ENDED
-            ) {
+            if (event.data === window.YT?.PlayerState.ENDED) {
+              handlePlaybackEnded();
+            } else if (event.data === window.YT?.PlayerState.PAUSED) {
               void syncRef.current(true);
             }
           },
@@ -372,7 +387,7 @@ export function VideoPlayer({
       if (player && !(player instanceof HTMLVideoElement)) player.destroy?.();
       playerRef.current = null;
     };
-  }, [initialPosition, resolvedId, sourceType]);
+  }, [handlePlaybackEnded, resolvedId, sourceType]);
 
   // Google Drive preview message handling
   useEffect(() => {
@@ -388,18 +403,20 @@ export function VideoPlayer({
       playingRef.current = isPlay;
       setIsPlaying(isPlay);
       if (!isPlay) {
-        void syncRef.current(true);
+        if (value.includes("end")) handlePlaybackEnded();
+        else void syncRef.current(true);
       }
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [sourceType]);
+  }, [handlePlaybackEnded, sourceType]);
 
   // High-accuracy 1-second tracking loop
   useEffect(() => {
     const timer = window.setInterval(() => {
       const now = Date.now();
-      const elapsed = Math.min(2, (now - lastTickRef.current) / 1000);
+      const lastTick = lastTickRef.current ?? now;
+      const elapsed = Math.min(2, (now - lastTick) / 1000);
       lastTickRef.current = now;
 
       const player = playerRef.current;
@@ -426,12 +443,6 @@ export function VideoPlayer({
         // Calculate video watch percentage using total accumulated playback time / lecture duration
         const watchPct = Math.min(100, (playTimeRef.current / length) * 100);
         setWatchPercentage(watchPct);
-
-        const activePct = Math.min(
-          100,
-          (activeTimeRef.current / length) * 100,
-        );
-        setActivePercentage(activePct);
       }
 
       // Sync periodically every 3 seconds while playing
@@ -483,13 +494,10 @@ export function VideoPlayer({
             allow="autoplay"
           />
         </div>
-        <ProgressLabel
-          watched={watchPercentage}
-          active={activePercentage}
-          threshold={threshold}
-          playing={isPlaying}
-          limited
-        />
+        <VideoProgressBar playing={isPlaying} progress={watchPercentage} />
+        {countdown !== null && onNext && (
+          <NextLecturePrompt countdown={countdown} onNext={onNext} />
+        )}
       </div>
     );
 
@@ -517,10 +525,12 @@ export function VideoPlayer({
               }
             }}
             onPlay={() => {
+              endHandledRef.current = false;
               playingRef.current = true;
               setIsPlaying(true);
             }}
             onPlaying={() => {
+              endHandledRef.current = false;
               playingRef.current = true;
               setIsPlaying(true);
             }}
@@ -549,25 +559,23 @@ export function VideoPlayer({
               playingRef.current = false;
               setIsPlaying(false);
               lastPositionRef.current = event.currentTarget.currentTime;
-              void sync(true);
+              handlePlaybackEnded();
             }}
             onTimeUpdate={(event) => {
               lastPositionRef.current = event.currentTarget.currentTime;
             }}
           />
         </div>
-        <ProgressLabel
-          watched={watchPercentage}
-          active={activePercentage}
-          threshold={threshold}
-          playing={isPlaying}
-        />
+        <VideoProgressBar playing={isPlaying} progress={watchPercentage} />
+        {countdown !== null && onNext && (
+          <NextLecturePrompt countdown={countdown} onNext={onNext} />
+        )}
       </div>
     );
 
   if (!resolvedId)
     return (
-      <div className="relative bg-[#F7F8FA] border border-border-subtle rounded-xl aspect-video flex items-center justify-center text-center p-8">
+      <div className="relative bg-page-bg border border-border-subtle rounded-xl aspect-video flex items-center justify-center text-center p-8">
         <div>
           <Play className="w-5 h-5 mx-auto mb-2 text-primary" />
           <h3 className="text-sm font-semibold text-text-primary">
@@ -585,85 +593,83 @@ export function VideoPlayer({
       <div className="relative bg-black rounded-xl overflow-hidden aspect-video border border-border-subtle">
         <div ref={containerRef} className="absolute inset-0 w-full h-full" />
       </div>
-      <ProgressLabel
-        watched={watchPercentage}
-        active={activePercentage}
-        threshold={threshold}
-        playing={isPlaying}
-      />
+      <VideoProgressBar playing={isPlaying} progress={watchPercentage} />
+      {countdown !== null && onNext && (
+        <NextLecturePrompt countdown={countdown} onNext={onNext} />
+      )}
     </div>
   );
 }
 
-function ProgressLabel({
-  watched,
-  active,
-  threshold = 90,
-  playing = false,
-  limited = false,
+function NextLecturePrompt({
+  countdown,
+  onNext,
 }: {
-  watched: number;
-  active: number;
-  threshold?: number;
-  playing?: boolean;
-  limited?: boolean;
+  countdown: number;
+  onNext: () => void;
 }) {
+  const progress = Math.max(0, Math.min(100, (countdown / 3) * 100));
+
   return (
-    <div className="space-y-1.5 text-xs text-text-secondary">
-      <div className="flex justify-between items-center">
-        <span>
-          Video watched:{" "}
-          <b className="text-primary">{Math.round(watched)}%</b>
-          <span className="text-[11px] text-text-muted ml-1">
-            (target: {Math.round(threshold)}%)
-          </span>
+    <div className="space-y-2 rounded-lg border border-border-subtle bg-page-bg px-3 py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[11px] font-medium text-text-secondary">
+          Next in {countdown > 0 ? countdown : 1}
         </span>
-        {!playing && (
-          <span
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
-            style={{ background: "rgba(239,68,68,0.10)", color: "#ef4444" }}
-          >
-            <span
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: "#ef4444",
-                display: "inline-block",
-              }}
-            />
-            Paused — not tracking
-          </span>
-        )}
-        {playing && (
-          <span
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
-            style={{ background: "rgba(34,197,94,0.10)", color: "#22c55e" }}
-          >
-            <span
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: "#22c55e",
-                display: "inline-block",
-                animation: "pulse 1.5s ease-in-out infinite",
-              }}
-            />
-            Tracking progress
-          </span>
-        )}
-        <span>
-          Active screen time:{" "}
-          <b className="text-primary">{Math.round(active)}%</b>
-          <span className="text-[11px] text-text-muted ml-1">(min: 60%)</span>
-        </span>
+        <button
+          type="button"
+          onClick={onNext}
+          className="rounded-md bg-primary px-3 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-primary-dark"
+        >
+          Next
+        </button>
       </div>
-      {limited && (
-        <p className="text-[11px]">
-          Google Drive reports activity only when its preview player exposes it.
-        </p>
-      )}
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+        <div
+          className="h-full rounded-full bg-primary transition-[width] duration-1000 ease-linear"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function VideoProgressBar({
+  progress,
+  playing,
+}: {
+  progress: number;
+  playing: boolean;
+}) {
+  const clamped = Math.min(100, Math.max(0, progress));
+
+  return (
+    <div className="space-y-1.5">
+      <div className="relative h-1 w-full overflow-hidden rounded-full bg-slate-200/80">
+        <div className="absolute inset-0 rounded-full bg-linear-to-r from-slate-200/30 via-slate-100/20 to-transparent" />
+        <div
+          className="relative h-full rounded-full bg-linear-to-r from-primary via-[#c4172c] to-[#d60528] shadow-[0_0_8px_rgba(214,5,40,0.22)] transition-all duration-300 ease-out"
+          style={{ width: `${clamped}%` }}
+        >
+          <div className="absolute inset-y-0 left-0 w-1/4 rounded-r-full bg-linear-to-r from-white/25 via-white/10 to-transparent" />
+        </div>
+      </div>
+      <div className="flex items-center justify-between text-[11px] text-text-muted">
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border-subtle bg-page-bg text-primary"
+            aria-label={playing ? "Video playing" : "Video paused"}
+          >
+            {playing ? (
+              <Pause className="h-3 w-3" />
+            ) : (
+              <Play className="h-3 w-3 ml-0.5" />
+            )}
+          </span>
+          <span>{playing ? "Playing" : "Paused"}</span>
+        </div>
+        <span>{Math.round(clamped)}%</span>
+      </div>
     </div>
   );
 }

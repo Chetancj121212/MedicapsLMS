@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import confetti from "canvas-confetti";
 import { fetchApi } from "@/lib/api";
@@ -9,13 +9,7 @@ import { getErrorMessage } from "@/lib/utils";
 import { QuizStudentView, QuizSubmissionResult } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/Card";
+import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { QuizSkeleton } from "@/components/ui/Skeleton";
 import {
   FileQuestion,
@@ -26,13 +20,10 @@ import {
   ArrowLeft,
   ChevronRight,
   HelpCircle,
-  Award,
-  Sparkles,
 } from "lucide-react";
 
 export default function StudentQuizPage() {
   const params = useParams();
-  const router = useRouter();
   const courseId = params?.courseId as string;
   const quizId = params?.quizId as string;
 
@@ -177,7 +168,9 @@ export default function StudentQuizPage() {
           <FileQuestion className="w-4 h-4 text-primary" />
           <span>Academic Knowledge Assessment</span>
         </div>
-        <h1 className="text-xl font-semibold text-text-primary">{quiz.title}</h1>
+        <h1 className="text-xl font-semibold text-text-primary">
+          {quiz.title}
+        </h1>
         <p className="text-xs text-text-secondary leading-relaxed">
           {quiz.description ||
             "Answer all questions. Per department requirements, passing accuracy is required to unlock subsequent content."}

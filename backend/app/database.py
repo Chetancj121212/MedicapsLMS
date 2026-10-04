@@ -40,8 +40,47 @@ from sqlalchemy import text
 async def init_db():
     """Create all tables and run backward-compatible schema migrations."""
     async with engine.begin() as conn:
-        from app.models import user, student, course, module, lecture, quiz, question, enrollment, progress, certificate
+        from app.models import user, student, course, module, lecture, quiz, question, enrollment, progress, certificate, audit
         await conn.run_sync(Base.metadata.create_all)
+
+        if conn.dialect.name == "sqlite":
+            certificate_schema = await conn.execute(
+                text(
+                    "SELECT sql FROM sqlite_master "
+                    "WHERE type = 'table' AND name = 'certificates'"
+                )
+            )
+            schema_sql = certificate_schema.scalar() or ""
+            normalized_schema = schema_sql.replace(" ", "").replace("\n", "")
+            if "UNIQUE(student_id,course_id)" in normalized_schema:
+                await conn.execute(text("ALTER TABLE certificates RENAME TO certificates_old"))
+                await conn.execute(
+                    text(
+                        "CREATE TABLE certificates ("
+                        "id INTEGER NOT NULL PRIMARY KEY, "
+                        "certificate_number VARCHAR(50) NOT NULL UNIQUE, "
+                        "student_id INTEGER NOT NULL, "
+                        "course_id INTEGER NOT NULL, "
+                        "issued_at DATETIME NOT NULL, "
+                        "certificate_file VARCHAR(500), "
+                        "is_revoked BOOLEAN NOT NULL, "
+                        "revoked_at DATETIME, "
+                        "FOREIGN KEY(student_id) REFERENCES students (id), "
+                        "FOREIGN KEY(course_id) REFERENCES courses (id)"
+                        ")"
+                    )
+                )
+                await conn.execute(
+                    text(
+                        "INSERT INTO certificates "
+                        "(id, certificate_number, student_id, course_id, issued_at, "
+                        "certificate_file, is_revoked, revoked_at) "
+                        "SELECT id, certificate_number, student_id, course_id, issued_at, "
+                        "certificate_file, is_revoked, revoked_at "
+                        "FROM certificates_old"
+                    )
+                )
+                await conn.execute(text("DROP TABLE certificates_old"))
 
         migrations = {
             "watched_segments": "TEXT DEFAULT '[]'",
@@ -64,6 +103,17 @@ async def init_db():
         for column, definition in lecture_migrations.items():
             try:
                 await conn.execute(text(f"ALTER TABLE lectures ADD COLUMN {column} {definition}"))
+            except Exception:
+                pass
+
+        user_migrations = {
+            "full_name": "VARCHAR(200)",
+            "email": "VARCHAR(320)",
+            "department": "VARCHAR(200)",
+        }
+        for column, definition in user_migrations.items():
+            try:
+                await conn.execute(text(f"ALTER TABLE users ADD COLUMN {column} {definition}"))
             except Exception:
                 pass
 

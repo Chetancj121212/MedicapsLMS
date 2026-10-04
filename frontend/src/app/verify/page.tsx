@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardContent } from "@/components/ui/Card";
-import { Award, Search, ShieldCheck } from "lucide-react";
+import { Award, Search } from "lucide-react";
 
 export default function VerifyIndexPage() {
   const router = useRouter();
@@ -21,14 +21,14 @@ export default function VerifyIndexPage() {
     <div className="max-w-xl mx-auto px-4 py-12 space-y-6">
       <div className="text-center space-y-2">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-primary/8 text-primary text-xs font-semibold border border-primary/15">
-          <ShieldCheck className="w-4 h-4 text-primary" />
           <span>Credential Registry</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-semibold text-text-primary tracking-tight">
           Verify Certificate
         </h1>
         <p className="text-xs text-text-secondary max-w-md mx-auto">
-          Enter the unique Certificate ID located at the bottom of the printed certificate or scan the QR code.
+          Enter the unique Certificate ID located at the bottom of the printed
+          certificate or scan the QR code.
         </p>
       </div>
 

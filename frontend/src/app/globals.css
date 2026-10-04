@@ -1,51 +1,66 @@
 @import url("https://cdn.jsdelivr.net/npm/fontsource-metropolis@latest/index.min.css");
+@import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@300..700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Metropolis", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --color-primary: #9A1E33;
+  --font-sans:
+    "Metropolis", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --color-primary: #9a1e33;
   --color-primary-dark: #7a1525;
   --color-primary-secondary: #512958;
   --color-primary-steel: #c44a5e;
   --color-burgundy: #512958;
   --color-btn-blue: #293786;
   --color-btn-blue-dark: #1e2c66;
-  --color-border-subtle: #E3E7EF;
-  --color-page-bg: #F7F8FA;
+  --color-border-subtle: #e3e7ef;
+  --color-page-bg: #f7f8fa;
   --color-text-primary: #172033;
-  --color-text-secondary: #60708A;
-  --color-text-muted: #8A97AA;
+  --color-text-secondary: #60708a;
+  --color-text-muted: #8a97aa;
 }
 
 :root {
-  --background: #F7F8FA;
+  --background: #f7f8fa;
   --foreground: #172033;
-  --card: #FFFFFF;
+  --card: #ffffff;
   --card-foreground: #172033;
-  --popover: #FFFFFF;
+  --popover: #ffffff;
   --popover-foreground: #172033;
   --primary: #293786;
-  --primary-foreground: #FFFFFF;
-  --secondary: #F0F3F8;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f3f8;
   --secondary-foreground: #172033;
-  --muted: #F0F3F8;
-  --muted-foreground: #60708A;
-  --accent: #9A1E33;
-  --accent-foreground: #FFFFFF;
-  --destructive: #9A1E33;
-  --destructive-foreground: #FFFFFF;
-  --border: #E3E7EF;
-  --input: #E3E7EF;
-  --ring: #9A1E33;
+  --muted: #f0f3f8;
+  --muted-foreground: #60708a;
+  --accent: #9a1e33;
+  --accent-foreground: #ffffff;
+  --destructive: #9a1e33;
+  --destructive-foreground: #ffffff;
+  --border: #e3e7ef;
+  --input: #e3e7ef;
+  --ring: #9a1e33;
   --radius: 0.5rem;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
+  scroll-snap-type: y proximity;
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+section,
+main > div {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
 }
 
 /* Restrained scrollbar for academic UI */
@@ -55,16 +70,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #F7F8FA;
+  background: #f7f8fa;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #CBD5E1;
+  background: #cbd5e1;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8;
+  background: #94a3b8;
 }
 
 @media print {

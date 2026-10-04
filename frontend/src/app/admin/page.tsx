@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
-  Shield,
   BookOpen,
   Users,
   Award,
@@ -83,14 +82,14 @@ export default function AdminDashboardPage() {
       <div className="bg-[#142250] text-white rounded-2xl p-6 sm:p-8 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 text-xs font-semibold text-amber-400 uppercase tracking-wider">
-            <Shield className="w-4 h-4" />
             <span>Department Administration</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
             ECE Faculty & Admin Portal
           </h1>
           <p className="text-xs text-slate-300">
-            Medicaps University &bull; Manage courses, student rosters, video uploads, and credentials.
+            Medicaps University &bull; Manage courses, student rosters, video
+            uploads, and credentials.
           </p>
         </div>
 
@@ -112,6 +111,14 @@ export default function AdminDashboardPage() {
               <span>Manage Students</span>
             </Button>
           </Link>
+
+          {(user?.role === "MASTER_ADMIN" || user?.role === "SUPER_ADMIN") && (
+            <Link href="/addadmins">
+              <Button size="sm" variant="outline" className="gap-1.5">
+                <span>Manage Admins</span>
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -123,8 +130,12 @@ export default function AdminDashboardPage() {
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-2xl font-semibold text-text-primary">{data.total_students}</div>
-              <div className="text-xs font-medium text-text-secondary">Total Students</div>
+              <div className="text-2xl font-semibold text-text-primary">
+                {data.total_students}
+              </div>
+              <div className="text-xs font-medium text-text-secondary">
+                Total Students
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -135,8 +146,12 @@ export default function AdminDashboardPage() {
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-2xl font-semibold text-text-primary">{data.total_courses}</div>
-              <div className="text-xs font-medium text-text-secondary">Total Courses</div>
+              <div className="text-2xl font-semibold text-text-primary">
+                {data.total_courses}
+              </div>
+              <div className="text-xs font-medium text-text-secondary">
+                Total Courses
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -147,8 +162,12 @@ export default function AdminDashboardPage() {
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-2xl font-semibold text-text-primary">{data.published_courses}</div>
-              <div className="text-xs font-medium text-text-secondary">Published Courses</div>
+              <div className="text-2xl font-semibold text-text-primary">
+                {data.published_courses}
+              </div>
+              <div className="text-xs font-medium text-text-secondary">
+                Published Courses
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -159,8 +178,12 @@ export default function AdminDashboardPage() {
               <Award className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-2xl font-semibold text-text-primary">{data.certificates_issued}</div>
-              <div className="text-xs font-medium text-text-secondary">Certificates Issued</div>
+              <div className="text-2xl font-semibold text-text-primary">
+                {data.certificates_issued}
+              </div>
+              <div className="text-xs font-medium text-text-secondary">
+                Certificates Issued
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -170,7 +193,9 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Quick Management Shortcuts */}
         <div className="space-y-4">
-          <h2 className="text-base font-bold text-slate-900">Administrative Tools</h2>
+          <h2 className="text-base font-bold text-slate-900">
+            Administrative Tools
+          </h2>
 
           <div className="space-y-3">
             <Link href="/admin/courses" className="block">
@@ -181,8 +206,12 @@ export default function AdminDashboardPage() {
                       <BookOpen className="w-4 h-4" />
                     </div>
                     <div>
-                      <div className="text-xs font-semibold text-text-primary">Course Builder</div>
-                      <div className="text-[11px] text-text-secondary">Upload lectures & create quizzes</div>
+                      <div className="text-xs font-semibold text-text-primary">
+                        Course Builder
+                      </div>
+                      <div className="text-[11px] text-text-secondary">
+                        Upload lectures & create quizzes
+                      </div>
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-text-muted" />
@@ -198,8 +227,12 @@ export default function AdminDashboardPage() {
                       <Users className="w-4 h-4" />
                     </div>
                     <div>
-                      <div className="text-xs font-semibold text-text-primary">Student Directory & CSV</div>
-                      <div className="text-[11px] text-text-secondary">Manage enrollment numbers & progress</div>
+                      <div className="text-xs font-semibold text-text-primary">
+                        Student Directory & CSV
+                      </div>
+                      <div className="text-[11px] text-text-secondary">
+                        Manage enrollment numbers & progress
+                      </div>
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-text-muted" />
@@ -215,8 +248,12 @@ export default function AdminDashboardPage() {
                       <Award className="w-4 h-4" />
                     </div>
                     <div>
-                      <div className="text-xs font-semibold text-text-primary">Certificate Registry</div>
-                      <div className="text-[11px] text-text-secondary">Verify authenticity & handle revocation</div>
+                      <div className="text-xs font-semibold text-text-primary">
+                        Certificate Registry
+                      </div>
+                      <div className="text-[11px] text-text-secondary">
+                        Verify authenticity & handle revocation
+                      </div>
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-text-muted" />
@@ -229,7 +266,9 @@ export default function AdminDashboardPage() {
         {/* Recent Activity Feed (Section 27) */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-text-primary">Recent Platform Activity</h2>
+            <h2 className="text-sm font-semibold text-text-primary">
+              Recent Platform Activity
+            </h2>
             <span className="text-xs text-text-muted">Live logs</span>
           </div>
 
@@ -240,13 +279,21 @@ export default function AdminDashboardPage() {
               </div>
             ) : (
               data.recent_activities.map((act, idx) => (
-                <div key={idx} className="p-3.5 flex items-center justify-between text-xs">
+                <div
+                  key={idx}
+                  className="p-3.5 flex items-center justify-between text-xs"
+                >
                   <div className="flex items-center gap-2.5">
                     <div className="w-2 h-2 rounded-full bg-primary" />
-                    <span className="font-medium text-text-primary">{act.message}</span>
+                    <span className="font-medium text-text-primary">
+                      {act.message}
+                    </span>
                   </div>
                   <span className="text-text-muted font-mono text-[11px] shrink-0">
-                    {new Date(act.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    {new Date(act.timestamp).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </span>
                 </div>
               ))

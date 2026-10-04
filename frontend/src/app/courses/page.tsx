@@ -1,10 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
 import { fetchApi } from "@/lib/api";
 import { CourseListItem } from "@/types";
-import { Button } from "@/components/ui/Button";
 import { CourseCardSkeleton } from "@/components/ui/Skeleton";
 import { Input } from "@/components/ui/Input";
 import { BookOpen, Search } from "lucide-react";
@@ -38,7 +36,7 @@ export default function CoursesCatalogPage() {
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="min-h-[calc(100vh-92px)] max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border-subtle pb-5">
         <div>

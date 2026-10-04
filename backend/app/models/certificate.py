@@ -1,16 +1,13 @@
 """Certificate model."""
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
 
 
 class Certificate(Base):
     __tablename__ = "certificates"
-    __table_args__ = (
-        UniqueConstraint("student_id", "course_id", name="uq_student_course_cert"),
-    )
 
     id = Column(Integer, primary_key=True, index=True)
     certificate_number = Column(String(50), unique=True, nullable=False, index=True)

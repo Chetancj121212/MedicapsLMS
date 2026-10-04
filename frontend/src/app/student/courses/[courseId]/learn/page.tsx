@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import confetti from "canvas-confetti";
@@ -13,8 +13,6 @@ import {
 } from "@/types";
 import { VideoPlayer } from "@/components/video/VideoPlayer";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
-import { Progress } from "@/components/ui/Progress";
 import { CourseCurriculumSkeleton } from "@/components/ui/Skeleton";
 import {
   Play,
@@ -24,9 +22,8 @@ import {
   Award,
   ChevronRight,
   Download,
-  ShieldCheck,
   ArrowLeft,
-  Circle,
+  LogOut,
 } from "lucide-react";
 
 export default function CourseLearningPage() {
@@ -35,7 +32,7 @@ export default function CourseLearningPage() {
   const { user, isLoading: authLoading } = useAuth();
   const courseId = params?.courseId as string;
 
-  const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
+  const [, setCourseDetail] = useState<CourseDetail | null>(null);
   const [curriculum, setCurriculum] = useState<CourseCurriculumStatus | null>(
     null,
   );
@@ -43,6 +40,8 @@ export default function CourseLearningPage() {
   const [selectedItem, setSelectedItem] = useState<CurriculumItemStatus | null>(
     null,
   );
+  const [playbackVersion, setPlaybackVersion] = useState(0);
+  const completionCelebratedRef = useRef(false);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -90,16 +89,37 @@ export default function CourseLearningPage() {
         return firstPlayable;
       });
 
-      // Check if course just completed
+      // Celebrate once when the certificate becomes available.
       if (
         curriculumData.enrollment.status === "COMPLETED" &&
-        curriculumData.certificate
+        curriculumData.certificate &&
+        !completionCelebratedRef.current
       ) {
+        completionCelebratedRef.current = true;
         confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 },
+          particleCount: 140,
+          spread: 80,
+          startVelocity: 35,
+          origin: { x: 0.2, y: 0.65 },
         });
+        window.setTimeout(() => {
+          confetti({
+            particleCount: 160,
+            spread: 100,
+            startVelocity: 30,
+            origin: { x: 0.8, y: 0.65 },
+          });
+        }, 220);
+        window.setTimeout(() => {
+          confetti({
+            particleCount: 120,
+            spread: 70,
+            origin: { x: 0.5, y: 0.45 },
+          });
+        }, 480);
+      }
+      if (curriculumData.enrollment.status !== "COMPLETED") {
+        completionCelebratedRef.current = false;
       }
     } catch (err) {
       console.error("Failed to load learning path:", err);
@@ -113,14 +133,21 @@ export default function CourseLearningPage() {
       router.push(`/login?redirect=/student/courses/${courseId}/learn`);
       return;
     }
+    if (user && user.role !== "STUDENT") {
+      router.push("/admin");
+      return;
+    }
     if (user && courseId) {
+      // Loading the course status after auth is confirmed is intentional; the
+      // async fetch updates state in the callback, not synchronously in the effect body.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadStatus();
     }
   }, [user, authLoading, courseId, loadStatus, router]);
 
-  const handleLectureCompleted = async () => {
+  const handleLectureCompleted = useCallback(async () => {
     await loadStatus();
-  };
+  }, [loadStatus]);
 
   // Realtime progress updater from VideoPlayer
   const handleProgressUpdate = useCallback(
@@ -228,14 +255,35 @@ export default function CourseLearningPage() {
     [selectedItem?.id],
   );
 
-  const selectContentItem = (item: CurriculumItemStatus) => {
-    if (item.is_locked) return;
-    if (item.type === "quiz") {
-      router.push(`/student/courses/${courseId}/quiz/${item.id}`);
-    } else {
-      setSelectedItem(item);
-    }
-  };
+  const selectContentItem = useCallback(
+    (item: CurriculumItemStatus) => {
+      if (item.is_locked) return;
+      if (item.type === "quiz") {
+        router.push(`/student/courses/${courseId}/quiz/${item.id}`);
+      } else {
+        setSelectedItem(item);
+        setPlaybackVersion((version) => version + 1);
+      }
+    },
+    [courseId, router],
+  );
+
+  const handleNextItem = useCallback(() => {
+    if (!curriculum || !selectedItem) return;
+
+    const items = [
+      ...curriculum.modules.flatMap((module) => module.items),
+      ...(curriculum.final_quizzes || []),
+    ];
+    const currentIndex = items.findIndex(
+      (item) => item.id === selectedItem.id && item.type === selectedItem.type,
+    );
+    const nextItem = items
+      .slice(currentIndex + 1)
+      .find((item) => !item.is_locked);
+
+    if (nextItem) selectContentItem(nextItem);
+  }, [curriculum, selectContentItem, selectedItem]);
 
   if (authLoading || loading) {
     return (
@@ -273,9 +321,6 @@ export default function CourseLearningPage() {
   }
 
   const isCourseCompleted = curriculum.enrollment.status === "COMPLETED";
-  const progressPct = Math.round(curriculum.enrollment.progress_percentage);
-  const courseTitle = courseDetail?.title || "Introduction to Embedded Systems";
-  const courseCode = courseDetail?.course_code || "ECE-301";
 
   // Find module containing the selected item
   const activeModule = curriculum.modules.find((m) =>
@@ -286,103 +331,17 @@ export default function CourseLearningPage() {
   const activeModuleIdx = activeModule
     ? curriculum.modules.indexOf(activeModule) + 1
     : 1;
-  const lectureWatchedPct = selectedItem?.is_completed
-    ? 100
-    : Math.round(selectedItem?.progress?.completion_percentage || 0);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      {/* ─── Course Header Sub-bar: Clean Academic Identification ─────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-border-subtle shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Link
-              href="/student"
-              className="text-xs text-text-secondary hover:text-primary flex items-center gap-1 font-medium transition-colors"
-            >
-              <ArrowLeft className="w-3 h-3" />
-              <span>Dashboard</span>
-            </Link>
-            <span className="text-border-subtle">/</span>
-            <span className="text-xs font-mono font-semibold text-primary bg-primary/8 px-2 py-0.5 rounded">
-              {courseCode}
-            </span>
-          </div>
-
-          <h1 className="text-xl sm:text-2xl font-semibold text-text-primary tracking-tight flex items-center gap-2">
-            <span>{courseTitle}</span>
-            {isCourseCompleted && (
-              <Badge variant="success" className="gap-1 text-[11px]">
-                <CheckCircle2 className="w-3 h-3 text-emerald-700" />
-                <span>Completed</span>
-              </Badge>
-            )}
-          </h1>
-        </div>
-
-        {/* Progress & Certificate Action */}
-        <div className="flex items-center gap-5 shrink-0">
-          <div className="space-y-1 text-right min-w-[140px]">
-            <div className="flex justify-between text-xs">
-              <span className="text-text-secondary font-medium">Your Progress</span>
-              <span className="font-semibold text-primary">
-                {progressPct}%
-              </span>
-            </div>
-            <Progress
-              value={curriculum.enrollment.progress_percentage}
-              indicatorColor="bg-primary"
-              className="w-36 sm:w-44 h-1.5"
-            />
-          </div>
-
-          {/* Download Certificate: ONLY visible upon course completion */}
-          {isCourseCompleted && curriculum.certificate ? (
-            <a
-              href={getCertificateDownloadUrl(
-                curriculum.certificate.certificate_number,
-              )}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Button size="sm" className="gap-1.5 h-8 text-xs shadow-xs">
-                <Award className="w-3.5 h-3.5" />
-                <span>Download Certificate</span>
-              </Button>
-            </a>
-          ) : curriculum.eligibility && !curriculum.eligibility.eligible ? (
-            <div
-              className="hidden md:flex items-center gap-1.5 text-[11px] text-text-muted border border-border-subtle px-2.5 py-1.5 rounded-md bg-[#F7F8FA] cursor-help"
-              title={curriculum.eligibility.missing_requirements.join('\n') || 'Complete all requirements'}
-            >
-              <Award className="w-3.5 h-3.5 text-text-muted" />
-              <span>
-                {curriculum.eligibility.lectures.remaining > 0
-                  ? `${curriculum.eligibility.lectures.remaining} lecture${curriculum.eligibility.lectures.remaining > 1 ? 's' : ''} remaining`
-                  : curriculum.eligibility.module_quizzes.remaining > 0
-                  ? `${curriculum.eligibility.module_quizzes.remaining} quiz${curriculum.eligibility.module_quizzes.remaining > 1 ? 'zes' : ''} remaining`
-                  : curriculum.eligibility.final_assessment.remaining > 0
-                  ? 'Final assessment required'
-                  : 'Certificate on completion'}
-              </span>
-            </div>
-          ) : (
-            <div className="hidden md:flex items-center gap-1.5 text-[11px] text-text-muted border border-border-subtle px-2.5 py-1.5 rounded-md bg-[#F7F8FA]">
-              <Award className="w-3.5 h-3.5 text-text-muted" />
-              <span>Certificate on completion</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ─── Main 70/30 Learning Layout (Dominant Video + Clean Curriculum) ─────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Dominant Video & Lecture Info Area (~70% = 8 cols) */}
-        <div className="lg:col-span-8 space-y-4">
-          <div className="bg-white rounded-xl border border-border-subtle p-4 sm:p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] space-y-4">
+    <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      {/* ─── Main 80/20 Learning Layout (Expanded Video + Curriculum Rail) ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,4fr)_minmax(300px,1fr)] gap-4 items-start">
+        {/* Dominant Video & Lecture Info Area (80% when space allows) */}
+        <div className="min-w-0 space-y-4 lg:-translate-x-6 lg:-translate-y-4">
+          <div className="bg-white rounded-xl border border-border-subtle p-2 sm:p-3 shadow-[0_1px_3px_rgba(0,0,0,0.02)] space-y-4">
             {selectedItem?.type === "lecture" ? (
               <VideoPlayer
-                key={selectedItem.id}
+                key={`${selectedItem.id}-${playbackVersion}`}
                 lectureId={selectedItem.id}
                 videoUrl={
                   selectedItem.video_source_url ||
@@ -414,10 +373,11 @@ export default function CourseLearningPage() {
                 }
                 isCompleted={selectedItem.is_completed}
                 onCompleted={handleLectureCompleted}
+                onNext={handleNextItem}
                 onProgressUpdate={handleProgressUpdate}
               />
             ) : selectedItem?.type === "quiz" ? (
-              <div className="py-16 text-center space-y-4 bg-[#F7F8FA] rounded-xl border border-border-subtle p-8">
+              <div className="py-16 text-center space-y-4 bg-page-bg rounded-xl border border-border-subtle p-8">
                 <FileQuestion className="w-10 h-10 text-primary mx-auto" />
                 <div className="space-y-1">
                   <h2 className="text-lg font-semibold text-text-primary">
@@ -440,7 +400,7 @@ export default function CourseLearningPage() {
               </div>
             ) : (
               /* Intentional Clean Video Placeholder per Section 13 */
-              <div className="aspect-video bg-[#F7F8FA] rounded-xl border border-border-subtle flex flex-col items-center justify-center p-8 text-center space-y-3">
+              <div className="aspect-video bg-page-bg rounded-xl border border-border-subtle flex flex-col items-center justify-center p-8 text-center space-y-3">
                 <div className="w-12 h-12 rounded-full bg-primary/8 text-primary flex items-center justify-center">
                   <Play className="w-5 h-5 ml-0.5 fill-primary" />
                 </div>
@@ -473,28 +433,6 @@ export default function CourseLearningPage() {
                   Electronics Engineering. Progress is recorded continuously as
                   you engage with the syllabus content.
                 </p>
-
-                {/* Subtle Lecture Progress Indicator */}
-                <div className="pt-2 space-y-1.5 max-w-sm">
-                  <div className="flex justify-between text-xs text-text-secondary">
-                    <span className="font-medium text-text-primary">
-                      Lecture Progress
-                    </span>
-                    <span className="font-semibold text-primary">
-                      {lectureWatchedPct}%
-                    </span>
-                  </div>
-                  <Progress
-                    value={lectureWatchedPct}
-                    indicatorColor="bg-primary"
-                    className="h-1.5"
-                  />
-                  <div className="text-[11px] text-text-muted">
-                    {selectedItem.is_completed
-                      ? "Completed — next items unlocked."
-                      : `Watch at least ${selectedItem.completion_threshold ?? 90}% and maintain 60% active screen time to unlock the next lecture.`}
-                  </div>
-                </div>
               </div>
             )}
           </div>
@@ -536,7 +474,6 @@ export default function CourseLearningPage() {
                     variant="outline"
                     className="gap-1.5 text-xs h-8 text-primary border-border-subtle"
                   >
-                    <ShieldCheck className="w-3.5 h-3.5" />
                     <span>Verify</span>
                   </Button>
                 </Link>
@@ -545,11 +482,11 @@ export default function CourseLearningPage() {
           )}
         </div>
 
-        {/* ─── Curriculum Sidebar (~30% = 4 cols) ─────────────────────────────── */}
-        <div className="lg:col-span-4 space-y-4">
+        {/* ─── Curriculum Sidebar (minimum 300px) ───────────────────────────── */}
+        <div className="min-w-0 space-y-4 lg:sticky lg:top-4 lg:self-start lg:-translate-x-8 lg:-translate-y-4 lg:w-[calc(100%+3rem)]">
           <div className="bg-white rounded-xl border border-border-subtle shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden">
             {/* Header */}
-            <div className="p-4 border-b border-border-subtle bg-[#F7F8FA] flex items-center justify-between">
+            <div className="p-4 border-b border-border-subtle bg-page-bg flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-xs font-semibold text-text-primary uppercase tracking-wider">
                   Course Content
@@ -559,77 +496,69 @@ export default function CourseLearningPage() {
                   Lectures Completed
                 </div>
               </div>
+              <Link href="/student" className="shrink-0">
+                <Button
+                  size="icon"
+                  variant="destructive"
+                  className="h-8 w-8 bg-primary-dark hover:bg-primary-dark/90"
+                  title="Exit course"
+                  aria-label="Exit course"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
             </div>
 
             {/* Module Hierarchy */}
-            <div className="divide-y divide-border-subtle max-h-[620px] overflow-y-auto">
+            <div className="divide-y divide-border-subtle max-h-155 overflow-y-auto">
               {curriculum.modules.map((mod, modIdx) => (
-                <div key={mod.id} className="p-3.5 space-y-2">
-                  <div>
-                    <div className="text-[10px] font-semibold tracking-wider text-text-secondary uppercase">
-                      MODULE {String(modIdx + 1).padStart(2, "0")}
+                <div key={mod.id} className="p-3.5">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-[10px] font-semibold tracking-wider text-text-secondary uppercase">
+                        MODULE {String(modIdx + 1).padStart(2, "0")}
+                      </div>
+                      <div className="text-xs font-semibold text-text-primary">
+                        {mod.title}
+                      </div>
                     </div>
-                    <div className="text-xs font-semibold text-text-primary">
-                      {mod.title}
-                    </div>
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] font-medium text-text-secondary">
+                      {mod.items.filter((it) => it.is_completed).length}/
+                      {mod.items.length}
+                    </span>
                   </div>
 
-                  {/* Module Items: Clean typography, indentation, no heavy button boxes */}
-                  <div className="space-y-0.5 pl-1.5">
+                  <div className="relative space-y-1 pl-5">
+                    <div className="absolute bottom-2 left-1 top-2 w-0.5 bg-slate-200" />
                     {mod.items.map((it) => {
                       const isSelected =
                         selectedItem?.id === it.id &&
                         selectedItem?.type === it.type;
+                      const isLocked = it.is_locked;
 
                       return (
-                        <button
-                          key={`${it.type}-${it.id}`}
-                          onClick={() => selectContentItem(it)}
-                          disabled={it.is_locked}
-                          className={`w-full text-left px-2.5 py-2 rounded-lg text-xs transition-colors flex items-center justify-between gap-2 ${
-                            isSelected
-                              ? "bg-primary/10 text-primary font-semibold"
-                              : it.is_locked
-                                ? "text-text-secondary cursor-not-allowed opacity-80"
-                                : it.is_completed
-                                  ? "text-text-primary hover:bg-[#F0F3F8] cursor-pointer"
-                                  : "text-text-primary hover:bg-[#F0F3F8] cursor-pointer"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 truncate">
-                            {it.is_completed ? (
-                              <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" />
-                            ) : it.is_locked ? (
-                              <Lock className="w-3.5 h-3.5 text-text-muted shrink-0" />
-                            ) : it.type === "quiz" ? (
-                              <FileQuestion className="w-3.5 h-3.5 text-primary shrink-0" />
-                            ) : (
-                              <Circle className="w-3.5 h-3.5 text-primary shrink-0" />
-                            )}
-                            <span className="truncate">{it.title}</span>
-                          </div>
-
-                          <div className="shrink-0 text-[10px]">
-                            {it.is_locked ? (
-                              <span className="text-text-muted font-mono">
-                                Locked
-                              </span>
-                            ) : it.is_completed ? (
-                              <span className="text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60">
-                                100%
-                              </span>
-                            ) : it.type === "quiz" ? (
-                              <span className="text-primary font-medium">
-                                Quiz
-                              </span>
-                            ) : it.progress &&
-                              it.progress.completion_percentage > 0 ? (
-                              <span className="text-text-secondary font-mono">
-                                {Math.round(it.progress.completion_percentage)}%
-                              </span>
-                            ) : null}
-                          </div>
-                        </button>
+                        <div key={`${it.type}-${it.id}`} className="relative">
+                          <span
+                            className={`absolute -left-5 top-3 h-2.5 w-2.5 rounded-full border ${
+                              it.is_completed
+                                ? "border-primary bg-primary"
+                                : "border-slate-200 bg-slate-100"
+                            }`}
+                          />
+                          <button
+                            onClick={() => selectContentItem(it)}
+                            disabled={isLocked}
+                            className={`w-full rounded-lg px-2.5 py-1.5 text-left text-xs transition-all ${
+                              isSelected
+                                ? "bg-primary/8 text-primary font-semibold shadow-[inset_0_0_0_1px_rgba(42,82,186,0.08)]"
+                                : isLocked
+                                  ? "cursor-not-allowed text-text-secondary opacity-80"
+                                  : "cursor-pointer text-text-primary hover:bg-[#F4F6F8]"
+                            }`}
+                          >
+                            <span className="block truncate">{it.title}</span>
+                          </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -638,7 +567,7 @@ export default function CourseLearningPage() {
 
               {/* Final Assessments */}
               {curriculum.final_quizzes?.length > 0 && (
-                <div className="p-3.5 space-y-2 bg-[#F7F8FA]">
+                <div className="p-3.5 space-y-2 bg-page-bg">
                   <div>
                     <div className="text-[10px] font-semibold tracking-wider text-primary uppercase">
                       FINAL ASSESSMENT

@@ -10,10 +10,14 @@ from app.models.question import Question, QuestionType, QuizOption
 from app.models.enrollment import Enrollment, EnrollmentStatus
 from app.models.progress import LectureProgress, QuizAttempt
 from app.models.certificate import Certificate
+from app.models.audit import AuditLog
+from app.models.revoked_token import RevokedToken
 
 __all__ = [
     "User",
     "UserRole",
+    "AuditLog",
+    "RevokedToken",
     "Student",
     "Course",
     "CourseStatus",

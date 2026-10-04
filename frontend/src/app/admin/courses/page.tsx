@@ -44,13 +44,17 @@ export default function AdminCoursesListPage() {
   const [creating, setCreating] = useState(false);
 
   // Edit course state
-  const [editingCourse, setEditingCourse] = useState<AdminCourseItem | null>(null);
+  const [editingCourse, setEditingCourse] = useState<AdminCourseItem | null>(
+    null,
+  );
   const [editCode, setEditCode] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [editInstructor, setEditInstructor] = useState("");
   const [editDuration, setEditDuration] = useState("");
-  const [editStatus, setEditStatus] = useState<"DRAFT" | "PUBLISHED" | "ARCHIVED">("DRAFT");
+  const [editStatus, setEditStatus] = useState<
+    "DRAFT" | "PUBLISHED" | "ARCHIVED"
+  >("DRAFT");
   const [updating, setUpdating] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
@@ -58,7 +62,9 @@ export default function AdminCoursesListPage() {
   const [newCode, setNewCode] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
-  const [newInstructor, setNewInstructor] = useState("Dr. S. K. Sharma (Professor, ECE)");
+  const [newInstructor, setNewInstructor] = useState(
+    "Dr. S. K. Sharma (Professor, ECE)",
+  );
   const [newDuration, setNewDuration] = useState("8 Weeks");
 
   const loadCourses = React.useCallback(async () => {
@@ -83,7 +89,7 @@ export default function AdminCoursesListPage() {
     }
 
     if (user && user.role !== "STUDENT") {
-      loadCourses();
+      void Promise.resolve().then(loadCourses);
     }
   }, [user, authLoading, router, loadCourses]);
 
@@ -126,7 +132,7 @@ export default function AdminCoursesListPage() {
   const handleDeleteCourse = async (course: AdminCourseItem) => {
     if (
       !confirm(
-        `Are you sure you want to permanently delete course "${course.course_code}: ${course.title}"?\n\nThis will remove all modules, video lectures, quizzes, and associated student progress.`
+        `Are you sure you want to permanently delete course "${course.course_code}: ${course.title}"?\n\nThis will remove all modules, video lectures, quizzes, and associated student progress.`,
       )
     ) {
       return;
@@ -176,7 +182,10 @@ export default function AdminCoursesListPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-6">
         <div>
-          <Link href="/admin" className="text-xs text-text-secondary hover:text-primary flex items-center gap-1 font-medium mb-1.5 transition-colors">
+          <Link
+            href="/admin"
+            className="text-xs text-text-secondary hover:text-primary flex items-center gap-1 font-medium mb-1.5 transition-colors"
+          >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to Admin Dashboard</span>
           </Link>
@@ -184,7 +193,8 @@ export default function AdminCoursesListPage() {
             Course Management & Builder
           </h1>
           <p className="text-xs text-text-secondary mt-0.5">
-            Create, edit, upload video lectures, configure quizzes, and publish academic courses.
+            Create, edit, upload video lectures, configure quizzes, and publish
+            academic courses.
           </p>
         </div>
 
@@ -206,11 +216,16 @@ export default function AdminCoursesListPage() {
       ) : courses.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-xl border border-slate-200 p-8 space-y-4">
           <BookOpen className="w-12 h-12 text-slate-300 mx-auto" />
-          <h3 className="text-base font-semibold text-slate-800">No Courses Created Yet</h3>
+          <h3 className="text-base font-semibold text-slate-800">
+            No Courses Created Yet
+          </h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            Get started by creating your first academic course offering for the ECE department.
+            Get started by creating your first academic course offering for the
+            ECE department.
           </p>
-          <Button onClick={() => setShowCreateModal(true)}>Create Course</Button>
+          <Button onClick={() => setShowCreateModal(true)}>
+            Create Course
+          </Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
@@ -221,14 +236,15 @@ export default function AdminCoursesListPage() {
             >
               <div className="space-y-1.5 max-w-2xl">
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="font-mono text-xs font-semibold">
+                  <Badge
+                    variant="secondary"
+                    className="font-mono text-xs font-semibold"
+                  >
                     {course.course_code}
                   </Badge>
                   <Badge
                     variant={
-                      course.status === "PUBLISHED"
-                        ? "success"
-                        : "secondary"
+                      course.status === "PUBLISHED" ? "success" : "secondary"
                     }
                     className="text-[10px]"
                   >
@@ -244,7 +260,9 @@ export default function AdminCoursesListPage() {
                 </p>
 
                 <div className="flex flex-wrap items-center gap-3 text-xs text-text-secondary pt-1">
-                  {course.instructor_name && <span>Instructor: {course.instructor_name}</span>}
+                  {course.instructor_name && (
+                    <span>Instructor: {course.instructor_name}</span>
+                  )}
                   <span>&bull;</span>
                   <span>{course.module_count} Modules</span>
                   <span>&bull;</span>
@@ -252,13 +270,18 @@ export default function AdminCoursesListPage() {
                   <span>&bull;</span>
                   <span>{course.quiz_count} Quizzes</span>
                   <span>&bull;</span>
-                  <span className="font-medium text-text-primary">{course.enrolled_count} Enrolled</span>
+                  <span className="font-medium text-text-primary">
+                    {course.enrolled_count} Enrolled
+                  </span>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <Link href={`/admin/courses/${course.id}/builder`}>
-                  <Button size="sm" className="bg-primary hover:bg-primary-dark text-white gap-1.5 h-8 text-xs">
+                  <Button
+                    size="sm"
+                    className="bg-primary hover:bg-primary-dark text-white gap-1.5 h-8 text-xs"
+                  >
                     <Settings className="w-3.5 h-3.5" />
                     <span>Builder</span>
                   </Button>
@@ -288,7 +311,12 @@ export default function AdminCoursesListPage() {
                 </Button>
 
                 <Link href={`/courses/${course.id}`} target="_blank">
-                  <Button size="sm" variant="ghost" title="Public Preview" className="h-8 text-xs text-slate-500">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    title="Public Preview"
+                    className="h-8 text-xs text-slate-500"
+                  >
                     Preview &rarr;
                   </Button>
                 </Link>
@@ -303,7 +331,9 @@ export default function AdminCoursesListPage() {
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-6 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-lg font-bold text-slate-900">Create New Course</h3>
+              <h3 className="text-lg font-bold text-slate-900">
+                Create New Course
+              </h3>
               <button
                 onClick={() => setShowCreateModal(false)}
                 className="text-slate-400 hover:text-slate-600 font-bold"
@@ -314,7 +344,9 @@ export default function AdminCoursesListPage() {
 
             <form onSubmit={handleCreateCourse} className="space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="font-bold text-slate-700">Course Code *</label>
+                <label className="font-bold text-slate-700">
+                  Course Code *
+                </label>
                 <Input
                   placeholder="e.g. ECE-401"
                   value={newCode}
@@ -325,7 +357,9 @@ export default function AdminCoursesListPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-slate-700">Course Title *</label>
+                <label className="font-bold text-slate-700">
+                  Course Title *
+                </label>
                 <Input
                   placeholder="e.g. Digital Signal Processing"
                   value={newTitle}
@@ -336,7 +370,9 @@ export default function AdminCoursesListPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-medium text-text-primary">Short Description</label>
+                <label className="font-medium text-text-primary">
+                  Short Description
+                </label>
                 <textarea
                   rows={2}
                   placeholder="Brief summary for catalog card..."
@@ -348,7 +384,9 @@ export default function AdminCoursesListPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="font-medium text-text-primary">Instructor Name</label>
+                  <label className="font-medium text-text-primary">
+                    Instructor Name
+                  </label>
                   <Input
                     value={newInstructor}
                     onChange={(e) => setNewInstructor(e.target.value)}
@@ -357,7 +395,9 @@ export default function AdminCoursesListPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-medium text-text-primary">Duration</label>
+                  <label className="font-medium text-text-primary">
+                    Duration
+                  </label>
                   <Input
                     value={newDuration}
                     onChange={(e) => setNewDuration(e.target.value)}
@@ -367,10 +407,18 @@ export default function AdminCoursesListPage() {
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-border-subtle">
-                <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowCreateModal(false)}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" isLoading={creating} className="bg-primary text-white">
+                <Button
+                  type="submit"
+                  isLoading={creating}
+                  className="bg-primary text-white"
+                >
                   Create Course & Launch Builder
                 </Button>
               </div>
@@ -385,8 +433,12 @@ export default function AdminCoursesListPage() {
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-6 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Edit Course Details</h3>
-                <p className="text-xs text-slate-500 font-mono">{editingCourse.course_code}</p>
+                <h3 className="text-lg font-bold text-slate-900">
+                  Edit Course Details
+                </h3>
+                <p className="text-xs text-slate-500 font-mono">
+                  {editingCourse.course_code}
+                </p>
               </div>
               <button
                 onClick={() => setEditingCourse(null)}
@@ -399,7 +451,9 @@ export default function AdminCoursesListPage() {
             <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Course Code *</label>
+                  <label className="font-bold text-slate-700">
+                    Course Code *
+                  </label>
                   <Input
                     value={editCode}
                     onChange={(e) => setEditCode(e.target.value)}
@@ -409,10 +463,16 @@ export default function AdminCoursesListPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Publishing Status *</label>
+                  <label className="font-bold text-slate-700">
+                    Publishing Status *
+                  </label>
                   <select
                     value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value as "DRAFT" | "PUBLISHED" | "ARCHIVED")}
+                    onChange={(e) =>
+                      setEditStatus(
+                        e.target.value as "DRAFT" | "PUBLISHED" | "ARCHIVED",
+                      )
+                    }
                     className="w-full rounded-lg border border-border-subtle p-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="DRAFT">DRAFT (Hidden)</option>
@@ -423,7 +483,9 @@ export default function AdminCoursesListPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-slate-700">Course Title *</label>
+                <label className="font-bold text-slate-700">
+                  Course Title *
+                </label>
                 <Input
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
@@ -433,7 +495,9 @@ export default function AdminCoursesListPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-medium text-text-primary">Short Description</label>
+                <label className="font-medium text-text-primary">
+                  Short Description
+                </label>
                 <textarea
                   rows={2}
                   value={editDesc}
@@ -444,7 +508,9 @@ export default function AdminCoursesListPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="font-medium text-text-primary">Instructor Name</label>
+                  <label className="font-medium text-text-primary">
+                    Instructor Name
+                  </label>
                   <Input
                     value={editInstructor}
                     onChange={(e) => setEditInstructor(e.target.value)}
@@ -453,7 +519,9 @@ export default function AdminCoursesListPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-medium text-text-primary">Estimated Duration</label>
+                  <label className="font-medium text-text-primary">
+                    Estimated Duration
+                  </label>
                   <Input
                     value={editDuration}
                     onChange={(e) => setEditDuration(e.target.value)}
@@ -463,10 +531,18 @@ export default function AdminCoursesListPage() {
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-border-subtle">
-                <Button type="button" variant="outline" onClick={() => setEditingCourse(null)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditingCourse(null)}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" isLoading={updating} className="bg-primary text-white">
+                <Button
+                  type="submit"
+                  isLoading={updating}
+                  className="bg-primary text-white"
+                >
                   Save Changes
                 </Button>
               </div>

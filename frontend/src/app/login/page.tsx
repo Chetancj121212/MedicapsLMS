@@ -2,11 +2,12 @@
 
 import React, { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardContent } from "@/components/ui/Card";
-import { Lock, User, AlertCircle, Eye, EyeOff, Key } from "lucide-react";
+import { Lock, User, AlertCircle, Eye, EyeOff, ArrowRight } from "lucide-react";
 
 function LoginForm() {
   const router = useRouter();
@@ -40,135 +41,141 @@ function LoginForm() {
         router.push("/admin");
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Invalid credentials. Please try again.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Invalid credentials. Please try again.",
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const fillCredentials = (userVal: string, passVal: string) => {
-    setUsername(userVal);
-    setPassword(passVal);
-    setError(null);
-  };
-
   return (
-    <div className="min-h-[calc(100vh-140px)] flex flex-col items-center justify-center px-4 py-8 bg-[#F7F8FA]">
-      <div className="w-full max-w-[380px] space-y-4">
-        {/* Academic Portal Header */}
-        <div className="text-center space-y-2">
-          <div className="flex justify-center pb-1">
-            <img
-              src="/medicaps-logo.png"
-              alt="Medicaps Faculty of Engineering"
-              className="h-11 w-auto object-contain"
-            />
-          </div>
-          <div className="text-[11px] font-semibold tracking-wider text-primary uppercase">
-            ECE COURSE PORTAL
-          </div>
-          <h1 className="text-xl font-semibold text-text-primary tracking-tight">
-            Student & Faculty Authentication
-          </h1>
-        </div>
-
-        {/* Primary Login Card */}
-        <Card className="border-border-subtle shadow-[0_1px_3px_rgba(0,0,0,0.03)] bg-white">
-          <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-4 p-5">
-              {error && (
-                <div className="p-2.5 rounded-lg bg-primary/8 border border-primary/20 flex items-start gap-2 text-xs text-primary">
-                  <AlertCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-text-primary">
-                  Enrollment Number / Username
-                </label>
-                <div className="relative">
-                  <Input
-                    type="text"
-                    placeholder="e.g. DEMO001 or admin"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="pl-8 text-sm h-9"
-                    required
-                  />
-                  <User className="w-4 h-4 text-text-muted absolute left-2.5 top-2.5" />
-                </div>
+    <section
+      className="login-page flex min-h-[calc(100vh-100px)] items-center justify-center bg-white/35 bg-[length:100%_100%] bg-center bg-blend-screen bg-no-repeat px-4 py-8 sm:py-12"
+      style={{
+        backgroundImage:
+          "linear-gradient(rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.68)), url('/Misty%20Minimalist%20University%20Campusscape.png')",
+        backgroundBlendMode: "screen",
+      }}
+    >
+      <Card className="w-full max-w-[540px] rounded-[18px] border border-[#E3E7EF] bg-white/95 shadow-[0_12px_36px_rgba(27,58,107,0.08)] backdrop-blur-[2px]">
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-5 p-6 sm:p-10">
+            <div className="text-center">
+              <Image
+                src="/medicaps-logo.png"
+                alt="Medicaps Faculty of Engineering"
+                width={200}
+                height={80}
+                className="mx-auto h-auto w-full max-w-[200px] object-contain"
+              />
+              <p className="mt-3 text-sm font-medium text-[#1B3A6B]">
+                Department of Electronics Engineering
+              </p>
+              <div className="mx-auto mt-5 flex h-[3px] max-w-[220px] overflow-hidden rounded-full">
+                <span className="w-1/2 bg-[#9A1E33]" />
+                <span className="w-1/2 bg-[#1B3A6B]" />
               </div>
+              <h1 className="mt-7 text-[34px] font-bold leading-tight tracking-[-0.02em]">
+                <span className="text-[#1B3A6B]">Student </span>
+                <span className="text-[#9A1E33]">Login</span>
+              </h1>
+              <p className="mx-auto mt-2 max-w-[360px] text-sm leading-6 text-[#60708A]">
+                Access your courses, lectures, assessments and certificates.
+              </p>
+            </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-text-primary">Password</label>
-                <div className="relative">
-                  <Input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="••••••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pl-8 pr-9 text-sm h-9"
-                    required
-                  />
-                  <Lock className="w-4 h-4 text-text-muted absolute left-2.5 top-2.5" />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2.5 top-2.5 text-text-muted hover:text-text-primary cursor-pointer"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full h-10 font-medium text-sm mt-2"
-                isLoading={loading}
+            {error && (
+              <div
+                role="alert"
+                className="flex items-start gap-2 rounded-lg border border-[#9A1E33]/20 bg-[#9A1E33]/5 p-3 text-sm text-[#9A1E33]"
               >
-                Sign In
-              </Button>
-            </CardContent>
-          </form>
-        </Card>
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
 
-        {/* Muted Developer Demo Access Panel */}
-        <div className="bg-white border border-border-subtle rounded-lg p-3 space-y-2 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-            <Key className="w-3.5 h-3.5 text-primary-secondary" />
-            <span>DEMO ACCESS</span>
-          </div>
+            <div className="space-y-2">
+              <label
+                htmlFor="username"
+                className="text-sm font-semibold text-[#172033]"
+              >
+                Enrollment Number / Username
+              </label>
+              <div className="relative">
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="Enter username or enrollment number"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="h-[50px] rounded-[9px] border-[#DCE4F0] bg-[#F0F4FA] pl-11 text-sm focus:border-[#1B3A6B] focus:ring-[#1B3A6B]"
+                  required
+                />
+                <User className="absolute left-4 top-[17px] h-4 w-4 text-[#60708A]" />
+              </div>
+            </div>
 
-          <div className="grid grid-cols-2 gap-2 text-left">
-            <button
-              type="button"
-              onClick={() => fillCredentials("DEMO001", "Demo@123")}
-              className="p-2 rounded border border-border-subtle bg-[#F7F8FA] hover:bg-[#F0F3F8] hover:border-primary/30 transition-colors cursor-pointer text-left"
+            <div className="space-y-2">
+              <label
+                htmlFor="password"
+                className="text-sm font-semibold text-[#172033]"
+              >
+                Password
+              </label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="h-[50px] rounded-[9px] border-[#DCE4F0] bg-[#F0F4FA] pl-11 pr-12 text-sm focus:border-[#1B3A6B] focus:ring-[#1B3A6B]"
+                  required
+                />
+                <Lock className="absolute left-4 top-[17px] h-4 w-4 text-[#60708A]" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3 rounded-md p-1 text-[#60708A] transition-colors hover:text-[#1B3A6B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3A6B]"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              variant="destructive"
+              className="mt-2 h-[52px] w-full rounded-[10px] text-[15px] font-semibold hover:bg-[#7A1525]"
+              isLoading={loading}
             >
-              <div className="text-xs font-semibold text-text-primary">Student</div>
-              <div className="text-[10px] text-text-secondary font-mono mt-0.5">DEMO001 / Demo@123</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => fillCredentials("admin", "Admin@123")}
-              className="p-2 rounded border border-border-subtle bg-[#F7F8FA] hover:bg-[#F0F3F8] hover:border-primary/30 transition-colors cursor-pointer text-left"
-            >
-              <div className="text-xs font-semibold text-text-primary">Admin</div>
-              <div className="text-[10px] text-text-secondary font-mono mt-0.5">admin / Admin@123</div>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+              <span>{loading ? "Signing In" : "Sign In"}</span>
+              {!loading && <ArrowRight className="ml-2 h-4 w-4" />}
+            </Button>
+          </CardContent>
+        </form>
+      </Card>
+    </section>
   );
 }
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-[50vh] flex items-center justify-center text-xs text-text-muted">Loading authentication portal...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-[50vh] flex items-center justify-center text-xs text-text-muted">
+          Loading authentication portal...
+        </div>
+      }
+    >
       <LoginForm />
     </Suspense>
   );

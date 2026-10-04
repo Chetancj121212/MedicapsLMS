@@ -12,14 +12,14 @@ from app.models.enrollment import Enrollment, EnrollmentStatus
 from app.models.certificate import Certificate
 from app.models.course import Course
 from app.schemas.schemas import StudentResponse, StudentUpdate, StudentDashboardResponse
-from app.services.auth_service import get_current_user
+from app.services.auth_service import require_student
 
 router = APIRouter(prefix="/api/student", tags=["Student"])
 
 
 @router.get("/dashboard")
 async def get_student_dashboard(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
     stmt_stud = select(Student).where(Student.user_id == current_user.id)
@@ -87,7 +87,7 @@ async def get_student_dashboard(
 
 @router.get("/profile")
 async def get_profile(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Student).where(Student.user_id == current_user.id)
@@ -101,7 +101,7 @@ async def get_profile(
 @router.put("/profile")
 async def update_profile(
     data: StudentUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Student).where(Student.user_id == current_user.id)

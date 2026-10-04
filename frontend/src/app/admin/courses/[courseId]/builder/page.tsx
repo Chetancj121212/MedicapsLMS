@@ -426,7 +426,7 @@ export default function CourseBuilderPage() {
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [showAddQForm, setShowAddQForm] = useState(false);
   const [newQText, setNewQText] = useState("");
-  const [newQType, setNewQType] = useState("MCQ");
+  const [newQType] = useState("MCQ");
   const [newQExplanation, setNewQExplanation] = useState("");
   const [newQOptions, setNewQOptions] = useState<QuizOption[]>([
     { option_text: "", is_correct: true },
@@ -512,7 +512,7 @@ export default function CourseBuilderPage() {
 
   useEffect(() => {
     if (user && user.role !== "STUDENT" && courseId) {
-      loadCourse();
+      void Promise.resolve().then(loadCourse);
     }
   }, [user, courseId, loadCourse]);
 

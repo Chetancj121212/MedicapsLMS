@@ -9,6 +9,10 @@ frontend/.next/
 frontend/out/
 frontend/build/
 backend/venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.benchmarks/
 
 # Runtime data and generated files
 data/*
@@ -18,6 +22,9 @@ backend/*.db
 backend/*.sqlite*
 backend/uploads/
 backend/certificates/
+backend/data/*
+!backend/data/README.md
+!backend/data/.gitkeep
 *.log
 
 # IDE and operating-system files

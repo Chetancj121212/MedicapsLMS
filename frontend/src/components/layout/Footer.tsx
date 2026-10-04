@@ -1,6 +1,7 @@
 import React from "react";
 import Link from "next/link";
-import { Mail, MapPin, Phone, ShieldCheck, ExternalLink } from "lucide-react";
+import Image from "next/image";
+import { Mail, MapPin, Phone, ExternalLink } from "lucide-react";
 
 export function Footer() {
   return (
@@ -10,9 +11,11 @@ export function Footer() {
           {/* Col 1: Portal Branding */}
           <div className="space-y-3">
             <div className="flex flex-col space-y-2">
-              <img
+              <Image
                 src="/medicaps-logo-white.png"
                 alt="Medicaps Faculty of Engineering"
+                width={180}
+                height={32}
                 className="h-8 w-auto object-contain object-left"
               />
               <div className="text-[11px] font-semibold tracking-wider text-amber-300 uppercase">
@@ -20,7 +23,8 @@ export function Footer() {
               </div>
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed max-w-xs">
-              Department of Electronics Engineering. Structured academic pedagogy and verified digital certification.
+              Department of Electronics Engineering. Structured academic
+              pedagogy and verified digital certification.
             </p>
           </div>
 
@@ -36,18 +40,26 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/courses" className="hover:text-white transition-colors">
+                <Link
+                  href="/courses"
+                  className="hover:text-white transition-colors"
+                >
                   ECE Online Courses
                 </Link>
               </li>
               <li>
-                <Link href="/verify" className="hover:text-white transition-colors flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#5a7ab5]" />
+                <Link
+                  href="/verify"
+                  className="hover:text-white transition-colors flex items-center gap-1"
+                >
                   <span>Certificate Verification</span>
                 </Link>
               </li>
               <li>
-                <Link href="/login" className="hover:text-white transition-colors">
+                <Link
+                  href="/login"
+                  className="hover:text-white transition-colors"
+                >
                   Portal Login
                 </Link>
               </li>
@@ -92,7 +104,8 @@ export function Footer() {
         {/* Bottom Bar */}
         <div className="border-t border-white/10 mt-6 pt-4 flex flex-col sm:flex-row justify-between items-center text-[11px] text-slate-400 gap-2">
           <div>
-            &copy; {new Date().getFullYear()} Medicaps University. Department of Electronics Engineering.
+            &copy; {new Date().getFullYear()} Medicaps University. Department of
+            Electronics Engineering.
           </div>
           <div className="flex space-x-4">
             <a

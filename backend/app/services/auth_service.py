@@ -1,6 +1,7 @@
 """Authentication service — JWT tokens, password hashing, and role verification."""
 
 from datetime import datetime, timedelta
+import hashlib
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -11,6 +12,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.database import get_db
 from app.models.user import User, UserRole
+from app.models.revoked_token import RevokedToken
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
@@ -54,12 +56,23 @@ def decode_token(token: str) -> dict:
         )
 
 
+def token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+async def is_token_revoked(token: str, db: AsyncSession) -> bool:
+    result = await db.execute(select(RevokedToken.id).where(RevokedToken.token_hash == token_hash(token)))
+    return result.scalar_one_or_none() is not None
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """Dependency: get the current authenticated user from the JWT token."""
     payload = decode_token(credentials.credentials)
+    if await is_token_revoked(credentials.credentials, db):
+        raise HTTPException(status_code=401, detail="Token has been revoked")
     if payload.get("type") != "access":
         raise HTTPException(status_code=401, detail="Invalid token type")
 
@@ -89,5 +102,19 @@ def require_role(*roles: UserRole):
 
 
 # Convenience dependencies
-require_admin = require_role(UserRole.SUPER_ADMIN, UserRole.DEPARTMENT_ADMIN, UserRole.COURSE_INSTRUCTOR)
+require_admin = require_role(
+    UserRole.MASTER_ADMIN,
+    UserRole.ADMIN,
+    UserRole.SUPER_ADMIN,
+    UserRole.DEPARTMENT_ADMIN,
+    UserRole.COURSE_INSTRUCTOR,
+)
 require_student = require_role(UserRole.STUDENT)
+require_master_admin = require_role(UserRole.MASTER_ADMIN, UserRole.SUPER_ADMIN)
+require_content_admin = require_role(
+    UserRole.MASTER_ADMIN,
+    UserRole.ADMIN,
+    UserRole.SUPER_ADMIN,
+    UserRole.DEPARTMENT_ADMIN,
+    UserRole.COURSE_INSTRUCTOR,
+)

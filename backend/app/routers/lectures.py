@@ -10,7 +10,7 @@ from app.models.student import Student
 from app.models.user import User
 from app.models.progress import LectureProgress
 from app.schemas.schemas import LectureProgressUpdate, LectureProgressResponse
-from app.services.auth_service import get_current_user
+from app.services.auth_service import require_student
 from app.services.progress_service import progress_service
 
 router = APIRouter(prefix="/api/lectures", tags=["Lectures"])
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/lectures", tags=["Lectures"])
 async def update_lecture_progress(
     lecture_id: int,
     data: LectureProgressUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
     stmt_stud = select(Student).where(Student.user_id == current_user.id)
@@ -79,7 +79,7 @@ async def update_lecture_progress(
 @router.get("/{lecture_id}/progress", response_model=LectureProgressResponse)
 async def get_lecture_progress(
     lecture_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
     stmt_stud = select(Student).where(Student.user_id == current_user.id)

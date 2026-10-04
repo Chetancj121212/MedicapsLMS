@@ -14,7 +14,6 @@ import {
   AlertTriangle,
   Award,
   Download,
-  ShieldCheck,
   Building,
   Calendar,
   User,
@@ -32,12 +31,17 @@ export default function CertificateVerificationPage() {
   useEffect(() => {
     async function verify() {
       try {
-        const res = await fetchApi<VerificationResponse>(`/api/certificates/verify/${certificateId}`);
+        const res = await fetchApi<VerificationResponse>(
+          `/api/certificates/verify/${certificateId}`,
+        );
         setData(res);
       } catch (err: unknown) {
         setData({
           valid: false,
-          message: err instanceof Error ? err.message : "Failed to contact verification server",
+          message:
+            err instanceof Error
+              ? err.message
+              : "Failed to contact verification server",
         });
       } finally {
         setLoading(false);
@@ -53,14 +57,14 @@ export default function CertificateVerificationPage() {
       {/* Header */}
       <div className="text-center space-y-2">
         <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
-          <ShieldCheck className="w-4 h-4 text-primary" />
           <span>Official Public Credential Registry</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-semibold text-text-primary tracking-tight">
           Certificate Verification
         </h1>
         <p className="text-xs text-text-secondary">
-          Department of Electronics Engineering &bull; Medicaps University, Indore
+          Department of Electronics Engineering &bull; Medicaps University,
+          Indore
         </p>
       </div>
 
@@ -84,14 +88,23 @@ export default function CertificateVerificationPage() {
 
           <CardContent className="p-6 text-center space-y-5">
             <p className="text-xs sm:text-sm text-text-secondary max-w-md mx-auto">
-              The certificate ID <span className="font-mono font-semibold text-text-primary">{certificateId}</span> could not be verified against the official records of Medicaps University.
+              The certificate ID{" "}
+              <span className="font-mono font-semibold text-text-primary">
+                {certificateId}
+              </span>{" "}
+              could not be verified against the official records of Medicaps
+              University.
             </p>
 
             <div className="bg-[#F7F8FA] border border-border-subtle rounded-lg p-4 text-xs text-text-secondary max-w-md mx-auto text-left space-y-1.5">
-              <div className="font-semibold text-text-primary">Possible reasons:</div>
+              <div className="font-semibold text-text-primary">
+                Possible reasons:
+              </div>
               <ul className="list-disc list-inside space-y-1">
                 <li>The certificate ID was entered incorrectly</li>
-                <li>The course was not completed or certificate was never issued</li>
+                <li>
+                  The course was not completed or certificate was never issued
+                </li>
                 <li>The credential may be invalid or expired</li>
               </ul>
             </div>
@@ -115,17 +128,22 @@ export default function CertificateVerificationPage() {
 
           <CardContent className="p-6 space-y-5">
             <div className="p-3 bg-primary/8 rounded-lg border border-primary/20 text-xs text-primary text-center font-medium">
-              This certificate is no longer considered valid. It has been officially revoked by the Department of Electronics Engineering.
+              This certificate is no longer considered valid. It has been
+              officially revoked by the Department of Electronics Engineering.
             </div>
 
             <div className="divide-y divide-border-subtle text-xs">
               <div className="py-2.5 flex justify-between">
                 <span className="text-text-secondary">Student Name</span>
-                <span className="font-semibold text-text-primary">{data.certificate.studentName}</span>
+                <span className="font-semibold text-text-primary">
+                  {data.certificate.studentName}
+                </span>
               </div>
               <div className="py-2.5 flex justify-between">
                 <span className="text-text-secondary">Course</span>
-                <span className="font-semibold text-text-primary">{data.certificate.courseName}</span>
+                <span className="font-semibold text-text-primary">
+                  {data.certificate.courseName}
+                </span>
               </div>
               <div className="py-2.5 flex justify-between">
                 <span className="text-text-secondary">Status</span>
@@ -155,9 +173,9 @@ export default function CertificateVerificationPage() {
 
           <CardContent className="p-6 sm:p-7 space-y-5">
             <div className="p-3 bg-primary/8 rounded-lg border border-primary/15 text-xs text-text-primary flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
               <span>
-                <strong>Official Record:</strong> This certificate is authentic and was officially awarded by Medicaps University.
+                <strong>Official Record:</strong> This certificate is authentic
+                and was officially awarded by Medicaps University.
               </span>
             </div>
 
@@ -199,7 +217,8 @@ export default function CertificateVerificationPage() {
                   <span>Department & Institution</span>
                 </span>
                 <span className="text-text-primary text-right text-xs font-medium">
-                  {data.certificate?.department} &bull; {data.certificate?.institution}
+                  {data.certificate?.department} &bull;{" "}
+                  {data.certificate?.institution}
                 </span>
               </div>
 
@@ -221,14 +240,21 @@ export default function CertificateVerificationPage() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <Button size="sm" className="w-full sm:w-auto gap-2 h-9 text-xs">
+                <Button
+                  size="sm"
+                  className="w-full sm:w-auto gap-2 h-9 text-xs"
+                >
                   <Download className="w-3.5 h-3.5" />
                   <span>Download Official PDF</span>
                 </Button>
               </a>
 
               <Link href="/courses">
-                <Button variant="outline" size="sm" className="w-full sm:w-auto h-9 text-xs">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full sm:w-auto h-9 text-xs"
+                >
                   Browse ECE Courses
                 </Button>
               </Link>

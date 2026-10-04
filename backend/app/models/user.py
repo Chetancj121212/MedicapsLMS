@@ -8,10 +8,14 @@ from app.database import Base
 
 
 class UserRole(str, enum.Enum):
+    MASTER_ADMIN = "MASTER_ADMIN"
+    ADMIN = "ADMIN"
+    STUDENT = "STUDENT"
+    # Legacy values are retained so existing databases can authenticate while
+    # they are migrated to the canonical roles.
     SUPER_ADMIN = "SUPER_ADMIN"
     DEPARTMENT_ADMIN = "DEPARTMENT_ADMIN"
     COURSE_INSTRUCTOR = "COURSE_INSTRUCTOR"
-    STUDENT = "STUDENT"
 
 
 class User(Base):
@@ -19,6 +23,9 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(100), unique=True, nullable=False, index=True)
+    full_name = Column(String(200), nullable=True)
+    email = Column(String(320), nullable=True, index=True)
+    department = Column(String(200), nullable=True)
     password_hash = Column(String(255), nullable=False)
     role = Column(Enum(UserRole), nullable=False, default=UserRole.STUDENT)
     is_active = Column(Boolean, default=True, nullable=False)

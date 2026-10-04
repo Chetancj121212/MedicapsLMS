@@ -42,7 +42,10 @@ async def seed():
             admin_user = User(
                 username=DEMO_ADMIN.username,
                 password_hash=hash_password(DEMO_ADMIN.password),
-                role=UserRole.DEPARTMENT_ADMIN,
+                role=UserRole.MASTER_ADMIN,
+                full_name="ECE Master Administrator",
+                email="admin@medicaps.ac.in",
+                department="Electronics and Communication Engineering",
                 is_active=True,
             )
             db.add(admin_user)

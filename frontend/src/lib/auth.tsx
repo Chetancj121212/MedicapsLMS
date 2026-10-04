@@ -1,6 +1,12 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+} from "react";
 import { useRouter } from "next/navigation";
 import { fetchApi } from "./api";
 import { User } from "@/types";
@@ -45,17 +51,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // 2. Try refresh token if available
     if (refreshToken) {
       try {
-        const res = await fetchApi<{ access_token: string; refresh_token: string }>(
-          "/api/auth/refresh",
-          {
-            method: "POST",
-            body: JSON.stringify({ refresh_token: refreshToken }),
-          }
-        );
+        const res = await fetchApi<{
+          access_token: string;
+          refresh_token: string;
+        }>("/api/auth/refresh", {
+          method: "POST",
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
         localStorage.setItem("auth_token", res.access_token);
         localStorage.setItem("refresh_token", res.refresh_token);
 
-        const data = await fetchApi<User>("/api/auth/me", { token: res.access_token });
+        const data = await fetchApi<User>("/api/auth/me", {
+          token: res.access_token,
+        });
         setUser(data);
         setIsLoading(false);
         return;
@@ -72,29 +80,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refreshUser();
+    void Promise.resolve().then(refreshUser);
   }, [refreshUser]);
 
   const login = async (username: string, password: string) => {
-    const res = await fetchApi<{ access_token: string; refresh_token: string; role: string }>(
-      "/api/auth/login",
-      {
-        method: "POST",
-        body: JSON.stringify({ username, password }),
-      }
-    );
+    const res = await fetchApi<{
+      access_token: string;
+      refresh_token: string;
+      role: string;
+    }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
 
     localStorage.setItem("auth_token", res.access_token);
     localStorage.setItem("refresh_token", res.refresh_token);
 
     // Fetch user details
-    const userData = await fetchApi<User>("/api/auth/me", { token: res.access_token });
+    const userData = await fetchApi<User>("/api/auth/me", {
+      token: res.access_token,
+    });
     setUser(userData);
 
     return { role: res.role };
   };
 
   const logout = () => {
+    const token = localStorage.getItem("auth_token");
+    if (token) {
+      void fetchApi("/api/auth/logout", {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          refresh_token: localStorage.getItem("refresh_token"),
+        }),
+      }).catch(() => undefined);
+    }
     localStorage.removeItem("auth_token");
     localStorage.removeItem("refresh_token");
     setUser(null);
@@ -102,7 +123,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, refreshUser }}>
+    <AuthContext.Provider
+      value={{ user, isLoading, login, logout, refreshUser }}
+    >
       {children}
     </AuthContext.Provider>
   );

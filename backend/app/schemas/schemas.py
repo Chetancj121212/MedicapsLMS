@@ -27,6 +27,50 @@ class UserResponse(BaseModel):
     username: str
     role: str
     is_active: bool
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    department: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AdminCreate(BaseModel):
+    full_name: str
+    email: EmailStr
+    username: str
+    password: str
+    department: Optional[str] = None
+    is_active: bool = True
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        if len(value) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return value
+
+
+class AdminUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    username: Optional[str] = None
+    department: Optional[str] = None
+
+
+class AdminStatusUpdate(BaseModel):
+    is_active: bool
+
+
+class AdminResponse(BaseModel):
+    id: int
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    username: str
+    department: Optional[str] = None
+    role: str
+    is_active: bool
+    created_at: datetime
 
     class Config:
         from_attributes = True
@@ -73,6 +117,13 @@ class StudentResponse(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        if len(value) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return value
 
 
 # ─── Course ──────────────────────────────────────────────────────────────────

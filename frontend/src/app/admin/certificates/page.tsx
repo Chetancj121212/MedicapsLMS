@@ -8,13 +8,7 @@ import { fetchApi, getCertificateDownloadUrl } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
-import {
-  ArrowLeft,
-  ExternalLink,
-  Download,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, ExternalLink, Download, Plus, Trash2 } from "lucide-react";
 
 interface AdminCertificateItem {
   id: number;
@@ -58,7 +52,9 @@ export default function AdminCertificatesPage() {
 
   const loadCertificates = useCallback(async () => {
     try {
-      const data = await fetchApi<AdminCertificateItem[]>("/api/admin/certificates");
+      const data = await fetchApi<AdminCertificateItem[]>(
+        "/api/admin/certificates",
+      );
       setCertificates(data);
     } catch (err) {
       console.error("Failed to load certificates:", err);
@@ -88,14 +84,20 @@ export default function AdminCertificatesPage() {
       return;
     }
     if (user && user.role !== "STUDENT") {
-      loadCertificates();
-      loadDropdownData();
+      void Promise.resolve().then(() => {
+        loadCertificates();
+        loadDropdownData();
+      });
     }
   }, [user, authLoading, router, loadCertificates, loadDropdownData]);
 
   const handleToggleRevoke = async (cert: AdminCertificateItem) => {
     const action = cert.is_revoked ? "restore" : "revoke";
-    if (!confirm(`Are you sure you want to ${action} certificate ${cert.certificate_number}?`)) {
+    if (
+      !confirm(
+        `Are you sure you want to ${action} certificate ${cert.certificate_number}?`,
+      )
+    ) {
       return;
     }
 
@@ -106,7 +108,11 @@ export default function AdminCertificatesPage() {
       });
       loadCertificates();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to update revocation status");
+      alert(
+        err instanceof Error
+          ? err.message
+          : "Failed to update revocation status",
+      );
     } finally {
       setTogglingId(null);
     }
@@ -115,7 +121,7 @@ export default function AdminCertificatesPage() {
   const handleDeleteCertificate = async (cert: AdminCertificateItem) => {
     if (
       !confirm(
-        `Are you sure you want to permanently delete certificate ${cert.certificate_number} issued to ${cert.student_name}?`
+        `Are you sure you want to permanently delete certificate ${cert.certificate_number} issued to ${cert.student_name}?`,
       )
     ) {
       return;
@@ -123,10 +129,14 @@ export default function AdminCertificatesPage() {
 
     setDeletingId(cert.id);
     try {
-      await fetchApi(`/api/admin/certificates/${cert.id}`, { method: "DELETE" });
+      await fetchApi(`/api/admin/certificates/${cert.id}`, {
+        method: "DELETE",
+      });
       loadCertificates();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to delete certificate");
+      alert(
+        err instanceof Error ? err.message : "Failed to delete certificate",
+      );
     } finally {
       setDeletingId(null);
     }
@@ -170,13 +180,17 @@ export default function AdminCertificatesPage() {
             Certificate Registry & Revocation
           </h1>
           <p className="text-xs text-text-secondary mt-0.5">
-            Department of Electronics Engineering &bull; Monitor issued digital credentials, issue new certificates, and handle revocations.
+            Department of Electronics Engineering &bull; Monitor issued digital
+            credentials, issue new certificates, and handle revocations.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="text-xs font-medium text-text-secondary bg-[#F7F8FA] px-3 py-1.5 rounded-lg border border-border-subtle">
-            Total Issued: <span className="text-primary font-semibold">{certificates.length}</span>
+            Total Issued:{" "}
+            <span className="text-primary font-semibold">
+              {certificates.length}
+            </span>
           </div>
 
           <Button
@@ -214,49 +228,72 @@ export default function AdminCertificatesPage() {
               ) : certificates.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-slate-400">
-                    No certificates have been issued yet. Click &ldquo;+ Issue Certificate&rdquo; above to create one.
+                    No certificates have been issued yet. Click &ldquo;+ Issue
+                    Certificate&rdquo; above to create one.
                   </td>
                 </tr>
               ) : (
                 certificates.map((cert) => (
-                  <tr key={cert.id} className="hover:bg-slate-50 transition-colors">
+                  <tr
+                    key={cert.id}
+                    className="hover:bg-slate-50 transition-colors"
+                  >
                     <td className="p-4 font-mono font-bold text-[#142250]">
                       {cert.certificate_number}
                     </td>
 
                     <td className="p-4">
-                      <div className="font-semibold text-slate-900">{cert.student_name}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{cert.enrollment_number}</div>
+                      <div className="font-semibold text-slate-900">
+                        {cert.student_name}
+                      </div>
+                      <div className="text-[11px] text-slate-400 font-mono">
+                        {cert.enrollment_number}
+                      </div>
                     </td>
 
                     <td className="p-4 font-medium text-slate-800">
                       {cert.course_title}
                     </td>
 
-                    <td className="p-4 text-slate-600">
-                      {cert.issued_at}
-                    </td>
+                    <td className="p-4 text-slate-600">{cert.issued_at}</td>
 
                     <td className="p-4 text-center">
-                      <Badge variant={cert.is_revoked ? "destructive" : "success"} className="text-[10px]">
+                      <Badge
+                        variant={cert.is_revoked ? "destructive" : "success"}
+                        className="text-[10px]"
+                      >
                         {cert.is_revoked ? "Revoked" : "Authentic"}
                       </Badge>
                     </td>
 
                     <td className="p-4 text-right space-x-1.5 whitespace-nowrap">
-                      <Link href={`/verify/${cert.certificate_number}`} target="_blank">
-                        <Button size="sm" variant="outline" className="text-xs h-7 px-2">
+                      <Link
+                        href={`/verify/${cert.certificate_number}`}
+                        target="_blank"
+                      >
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7 px-2"
+                        >
                           <ExternalLink className="w-3.5 h-3.5 mr-1" />
                           <span>Verify</span>
                         </Button>
                       </Link>
 
                       <a
-                        href={getCertificateDownloadUrl(cert.certificate_number)}
+                        href={getCertificateDownloadUrl(
+                          cert.certificate_number,
+                        )}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        <Button size="sm" variant="ghost" className="text-xs h-7 px-2 text-slate-600" title="Download PDF">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-xs h-7 px-2 text-slate-600"
+                          title="Download PDF"
+                        >
                           <Download className="w-3.5 h-3.5" />
                         </Button>
                       </a>
@@ -297,15 +334,25 @@ export default function AdminCertificatesPage() {
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">Issue Academic Certificate</h3>
-              <button onClick={() => setShowIssueModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">
+              <h3 className="text-base font-bold text-slate-900">
+                Issue Academic Certificate
+              </h3>
+              <button
+                onClick={() => setShowIssueModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold"
+              >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleIssueCertificate} className="space-y-4 text-xs">
+            <form
+              onSubmit={handleIssueCertificate}
+              className="space-y-4 text-xs"
+            >
               <div className="space-y-1">
-                <label className="font-bold text-slate-700">Select Student *</label>
+                <label className="font-bold text-slate-700">
+                  Select Student *
+                </label>
                 <select
                   value={selectedStudentId}
                   onChange={(e) => setSelectedStudentId(e.target.value)}
@@ -321,7 +368,9 @@ export default function AdminCertificatesPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-slate-700">Select Course *</label>
+                <label className="font-bold text-slate-700">
+                  Select Course *
+                </label>
                 <select
                   value={selectedCourseId}
                   onChange={(e) => setSelectedCourseId(e.target.value)}
@@ -337,10 +386,18 @@ export default function AdminCertificatesPage() {
               </div>
 
               <div className="flex justify-end gap-3 pt-3 border-t border-border-subtle">
-                <Button type="button" variant="outline" onClick={() => setShowIssueModal(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowIssueModal(false)}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" isLoading={issuing} className="bg-emerald-700 text-white font-semibold">
+                <Button
+                  type="submit"
+                  isLoading={issuing}
+                  className="bg-emerald-700 text-white font-semibold"
+                >
                   Generate & Issue Certificate
                 </Button>
               </div>

@@ -16,7 +16,7 @@ from app.models.user import User
 from app.models.enrollment import Enrollment, EnrollmentStatus
 from app.models.certificate import Certificate
 from app.schemas.schemas import CourseListResponse, CourseResponse
-from app.services.auth_service import get_current_user, require_student
+from app.services.auth_service import require_student
 from app.services.progress_service import progress_service
 
 router = APIRouter(prefix="/api/courses", tags=["Courses"])
@@ -82,7 +82,7 @@ async def get_course_detail(course_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/{course_id}/enroll")
 async def enroll_course(
     course_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
     """Enrolls the authenticated student in the specified course."""
@@ -112,7 +112,7 @@ async def enroll_course(
 @router.get("/{course_id}/learn")
 async def get_learning_path(
     course_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
     """Returns the course curriculum with locked/unlocked/completed states for the student."""
@@ -139,8 +139,12 @@ async def get_learning_path(
 
     # Check if certificate exists (already issued by eligibility service)
     cert_stmt = select(Certificate).where(
-        and_(Certificate.student_id == student.id, Certificate.course_id == course_id)
-    )
+        and_(
+            Certificate.student_id == student.id,
+            Certificate.course_id == course_id,
+            Certificate.is_revoked == False,
+        )
+    ).order_by(Certificate.issued_at.desc())
     cert_res = await db.execute(cert_stmt)
     cert = cert_res.scalar_one_or_none()
 
@@ -156,7 +160,7 @@ async def get_learning_path(
 @router.get("/{course_id}/eligibility")
 async def check_course_eligibility(
     course_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -174,8 +178,12 @@ async def check_course_eligibility(
 
     # Also check if certificate already exists
     cert_stmt = select(Certificate).where(
-        and_(Certificate.student_id == student.id, Certificate.course_id == course_id)
-    )
+        and_(
+            Certificate.student_id == student.id,
+            Certificate.course_id == course_id,
+            Certificate.is_revoked == False,
+        )
+    ).order_by(Certificate.issued_at.desc())
     cert_res = await db.execute(cert_stmt)
     cert = cert_res.scalar_one_or_none()
 
