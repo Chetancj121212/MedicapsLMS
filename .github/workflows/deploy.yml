@@ -10,12 +10,17 @@ jobs:
     name: Deploy to College Server
     runs-on: self-hosted
 
+    env:
+      DOCKER_HOST: npipe:////./pipe/dockerDesktopLinuxEngine
+
     steps:
       - name: Update server code
         shell: powershell
         run: |
           git config --global --add safe.directory F:/CoursePortal
+
           Set-Location "F:\CoursePortal"
+
           Write-Host "Fetching latest code..."
           git fetch origin main
 
@@ -25,6 +30,9 @@ jobs:
       - name: Check Docker
         shell: powershell
         run: |
+          Write-Host "Docker endpoint:"
+          Write-Host $env:DOCKER_HOST
+
           docker version
           docker compose version
 
@@ -41,7 +49,6 @@ jobs:
         run: |
           Set-Location "F:\CoursePortal"
 
-          Write-Host "Running containers:"
           docker compose ps
 
       - name: Deployment complete
