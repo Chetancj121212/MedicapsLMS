@@ -5,6 +5,12 @@ on:
     branches:
       - main
 
+  workflow_dispatch:
+
+concurrency:
+  group: medicaps-lms-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Deploy to College Server
@@ -14,46 +20,117 @@ jobs:
       DOCKER_HOST: npipe:////./pipe/dockerDesktopLinuxEngine
 
     steps:
+      # ---------------------------------------------------------
+      # 1. Update server repository
+      # ---------------------------------------------------------
       - name: Update server code
         shell: powershell
         run: |
+          $ErrorActionPreference = "Stop"
+
+          Write-Host "======================================"
+          Write-Host " Updating Medicaps LMS source code"
+          Write-Host "======================================"
+
           git config --global --add safe.directory F:/CoursePortal
 
           Set-Location "F:\CoursePortal"
 
-          Write-Host "Fetching latest code..."
+          Write-Host "Current directory:"
+          Get-Location
+
+          Write-Host "Fetching latest main branch..."
           git fetch origin main
 
-          Write-Host "Updating working tree..."
+          Write-Host "Resetting server to origin/main..."
           git reset --hard origin/main
 
+          Write-Host "Current commit:"
+          git log -1 --oneline
+
+      # ---------------------------------------------------------
+      # 2. Verify Docker
+      # ---------------------------------------------------------
       - name: Check Docker
         shell: powershell
         run: |
+          $ErrorActionPreference = "Stop"
+
+          Write-Host "======================================"
+          Write-Host " Checking Docker"
+          Write-Host "======================================"
+
           Write-Host "Docker endpoint:"
           Write-Host $env:DOCKER_HOST
 
+          Write-Host ""
+          Write-Host "Docker version:"
           docker version
+
+          Write-Host ""
+          Write-Host "Docker Compose version:"
           docker compose version
 
+      # ---------------------------------------------------------
+      # 3. Verify Compose configuration
+      # ---------------------------------------------------------
+      - name: Validate Docker Compose
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          Set-Location "F:\CoursePortal"
+
+          Write-Host "======================================"
+          Write-Host " Validating Docker Compose"
+          Write-Host "======================================"
+
+          docker compose config
+
+      # ---------------------------------------------------------
+      # 4. Build and deploy
+      # ---------------------------------------------------------
       - name: Build and restart LMS
         shell: powershell
         run: |
+          $ErrorActionPreference = "Stop"
+
           Set-Location "F:\CoursePortal"
 
-          Write-Host "Building and starting containers..."
+          Write-Host "======================================"
+          Write-Host " Building and starting Medicaps LMS"
+          Write-Host "======================================"
+
           docker compose up -d --build
 
+      # ---------------------------------------------------------
+      # 5. Check containers
+      # ---------------------------------------------------------
       - name: Check deployment
         shell: powershell
         run: |
+          $ErrorActionPreference = "Stop"
+
           Set-Location "F:\CoursePortal"
+
+          Write-Host "======================================"
+          Write-Host " Deployment status"
+          Write-Host "======================================"
 
           docker compose ps
 
+          Write-Host ""
+          Write-Host "Docker containers:"
+          docker ps
+
+      # ---------------------------------------------------------
+      # 6. Deployment complete
+      # ---------------------------------------------------------
       - name: Deployment complete
         shell: powershell
         run: |
+          Write-Host ""
           Write-Host "======================================"
-          Write-Host " Medicaps LMS deployment completed"
+          Write-Host " MEDICAPS LMS DEPLOYMENT SUCCESSFUL"
           Write-Host "======================================"
+          Write-Host ""
