@@ -14,8 +14,8 @@ jobs:
       - name: Update server code
         shell: powershell
         run: |
+          git config --global --add safe.directory F:/CoursePortal
           Set-Location "F:\CoursePortal"
-
           Write-Host "Fetching latest code..."
           git fetch origin main
 
