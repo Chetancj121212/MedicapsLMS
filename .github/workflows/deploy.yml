@@ -1,0 +1,52 @@
+name: Deploy Medicaps LMS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to College Server
+    runs-on: self-hosted
+
+    steps:
+      - name: Update server code
+        shell: powershell
+        run: |
+          Set-Location "F:\CoursePortal"
+
+          Write-Host "Fetching latest code..."
+          git fetch origin main
+
+          Write-Host "Updating working tree..."
+          git reset --hard origin/main
+
+      - name: Check Docker
+        shell: powershell
+        run: |
+          docker version
+          docker compose version
+
+      - name: Build and restart LMS
+        shell: powershell
+        run: |
+          Set-Location "F:\CoursePortal"
+
+          Write-Host "Building and starting containers..."
+          docker compose up -d --build
+
+      - name: Check deployment
+        shell: powershell
+        run: |
+          Set-Location "F:\CoursePortal"
+
+          Write-Host "Running containers:"
+          docker compose ps
+
+      - name: Deployment complete
+        shell: powershell
+        run: |
+          Write-Host "======================================"
+          Write-Host " Medicaps LMS deployment completed"
+          Write-Host "======================================"
