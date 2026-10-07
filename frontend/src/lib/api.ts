@@ -1,6 +1,7 @@
 import { environment } from "@/config/environment";
 
 export const API_BASE = environment.apiUrl;
+export const BACKUP_API_BASE = environment.backupApiUrl;
 
 export function getCertificateDownloadUrl(certificateNumber: string): string {
   return `${API_BASE}/api/certificates/${certificateNumber}/download`;
@@ -8,6 +9,19 @@ export function getCertificateDownloadUrl(certificateNumber: string): string {
 
 interface FetchOptions extends RequestInit {
   token?: string;
+}
+
+class ClientHttpError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+    this.name = "ClientHttpError";
+  }
+}
+
+function normalizeUrl(base: string, endpoint: string): string {
+  const cleanBase = base.replace(/\/+$/, "");
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  return `${cleanBase}${cleanEndpoint}`;
 }
 
 export async function fetchApi<T = unknown>(
@@ -34,14 +48,26 @@ export async function fetchApi<T = unknown>(
     headers["Authorization"] = `Bearer ${authToken}`;
   }
 
-  const candidateUrls = new Set<string>();
+  const candidateUrls: string[] = [];
   if (endpoint.startsWith("http")) {
-    candidateUrls.add(endpoint);
-  } else if (endpoint.startsWith("/")) {
-    candidateUrls.add(endpoint);
-    candidateUrls.add(`${API_BASE}${endpoint}`);
+    candidateUrls.push(endpoint);
   } else {
-    candidateUrls.add(`${API_BASE}${endpoint}`);
+    // 1. Primary API URL
+    if (API_BASE) {
+      candidateUrls.push(normalizeUrl(API_BASE, endpoint));
+    }
+    // 2. Backup API URL for failover
+    if (BACKUP_API_BASE && BACKUP_API_BASE !== API_BASE) {
+      const backupUrl = normalizeUrl(BACKUP_API_BASE, endpoint);
+      if (!candidateUrls.includes(backupUrl)) {
+        candidateUrls.push(backupUrl);
+      }
+    }
+    // 3. Fallback to local Next.js proxy rewrite if relative path
+    const relativePath = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+    if (!candidateUrls.includes(relativePath)) {
+      candidateUrls.push(relativePath);
+    }
   }
 
   let lastError: unknown = null;
@@ -61,6 +87,12 @@ export async function fetchApi<T = unknown>(
         } catch {
           // response wasn't JSON
         }
+
+        // On client-side errors (400, 401, 403, 422, etc.), do not failover to backup
+        if (res.status >= 400 && res.status < 500 && res.status !== 404 && res.status !== 408) {
+          throw new ClientHttpError(errorDetail, res.status);
+        }
+
         throw new Error(errorDetail);
       }
 
@@ -70,9 +102,13 @@ export async function fetchApi<T = unknown>(
 
       return (await res.json()) as T;
     } catch (error) {
+      if (error instanceof ClientHttpError) {
+        throw error;
+      }
       lastError = error;
     }
   }
 
   throw lastError instanceof Error ? lastError : new Error("Request failed");
 }
+

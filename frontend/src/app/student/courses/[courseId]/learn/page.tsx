@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import confetti from "canvas-confetti";
-import { fetchApi, getCertificateDownloadUrl } from "@/lib/api";
+import { fetchApi, getCertificateDownloadUrl, API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import {
   CourseCurriculumStatus,
@@ -349,7 +349,7 @@ export default function CourseLearningPage() {
                     ? selectedItem.video_source_url ||
                       selectedItem.video_path ||
                       ""
-                    : `http://localhost:8000${selectedItem.video_path || "/uploads/videos/sample.mp4"}`
+                    : `${API_BASE}${selectedItem.video_path || "/uploads/videos/sample.mp4"}`
                 }
                 videoSourceType={selectedItem.video_source_type}
                 videoId={selectedItem.video_id}

@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
-import { fetchApi } from "@/lib/api";
+import { fetchApi, API_BASE } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
@@ -1647,7 +1647,7 @@ export default function CourseBuilderPage() {
 
                           const url = path.startsWith("http")
                             ? path
-                            : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${path}`;
+                            : `${API_BASE}${path}`;
                           extractVideoDuration(url, (dur) =>
                             setEditLecDuration(String(dur)),
                           );
