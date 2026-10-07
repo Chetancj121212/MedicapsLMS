@@ -1,7 +1,7 @@
 """Application configuration loaded from environment variables."""
 
 from pathlib import Path
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 import json
 
@@ -43,10 +43,12 @@ class Settings(BaseSettings):
         database_path = Path(self.DATA_DIR).resolve() / "lms.db"
         return f"sqlite+aiosqlite:///{database_path.as_posix()}"
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
 
 
 settings = Settings()

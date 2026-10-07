@@ -52,21 +52,18 @@ export async function fetchApi<T = unknown>(
   if (endpoint.startsWith("http")) {
     candidateUrls.push(endpoint);
   } else {
-    // 1. Primary API URL
-    if (API_BASE) {
-      candidateUrls.push(normalizeUrl(API_BASE, endpoint));
-    }
-    // 2. Backup API URL for failover
+    const urls: string[] = [];
+    if (API_BASE) urls.push(normalizeUrl(API_BASE, endpoint));
     if (BACKUP_API_BASE && BACKUP_API_BASE !== API_BASE) {
-      const backupUrl = normalizeUrl(BACKUP_API_BASE, endpoint);
-      if (!candidateUrls.includes(backupUrl)) {
-        candidateUrls.push(backupUrl);
-      }
+      urls.push(normalizeUrl(BACKUP_API_BASE, endpoint));
     }
-    // 3. Fallback to local Next.js proxy rewrite if relative path
     const relativePath = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-    if (!candidateUrls.includes(relativePath)) {
-      candidateUrls.push(relativePath);
+    if (!urls.includes(relativePath)) urls.push(relativePath);
+
+    for (const u of urls) {
+      if (!candidateUrls.includes(u)) {
+        candidateUrls.push(u);
+      }
     }
   }
 
@@ -74,22 +71,36 @@ export async function fetchApi<T = unknown>(
 
   for (const url of candidateUrls) {
     try {
+      let signal = restOptions.signal;
+      if (!signal && typeof AbortSignal !== "undefined" && "timeout" in AbortSignal) {
+        signal = AbortSignal.timeout(5000);
+      }
+
       const res = await fetch(url, {
         ...restOptions,
+        signal,
         headers,
       });
 
       if (!res.ok) {
+        let isJson = false;
         let errorDetail = `Request failed with status ${res.status}`;
         try {
           const errJson = await res.json();
           errorDetail = errJson.detail || errJson.message || errorDetail;
+          isJson = true;
         } catch {
-          // response wasn't JSON
+          // response wasn't JSON (e.g. Cloudflare HTML 403/502/504)
         }
 
-        // On client-side errors (400, 401, 403, 422, etc.), do not failover to backup
-        if (res.status >= 400 && res.status < 500 && res.status !== 404 && res.status !== 408) {
+        // On genuine API client errors with JSON responses (400, 401, 422), do not failover
+        if (
+          isJson &&
+          res.status >= 400 &&
+          res.status < 500 &&
+          res.status !== 404 &&
+          res.status !== 408
+        ) {
           throw new ClientHttpError(errorDetail, res.status);
         }
 

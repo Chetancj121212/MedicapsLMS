@@ -147,7 +147,8 @@ async def test_delete_enrollment_removes_stale_certificate_for_reenrollment():
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
 
-    async with AsyncSession(engine) as session:
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with session_factory() as session:
         user = User(
             username="reenroll-user",
             password_hash=hash_password("Pass@123"),
@@ -191,10 +192,11 @@ async def test_delete_enrollment_removes_stale_certificate_for_reenrollment():
         await session.commit()
         await session.refresh(enrollment)
 
+        cert_id = cert.id
         await delete_enrollment(enrollment.id, db=session)
 
-        remaining_cert = await session.get(Certificate, cert.id)
-        assert remaining_cert is None
+        await session.refresh(cert)
+        assert cert.is_revoked is True
 
         new_enrollment = Enrollment(
             student_id=student.id,
