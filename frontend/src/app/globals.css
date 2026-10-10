@@ -44,23 +44,12 @@
   --radius: 0.5rem;
 }
 
-html {
-  scroll-behavior: smooth;
-}
-
 body {
-  scroll-snap-type: y proximity;
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-section,
-main > div {
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
 }
 
 /* Restrained scrollbar for academic UI */

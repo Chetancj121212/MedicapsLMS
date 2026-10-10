@@ -15,6 +15,11 @@ cleanup() {
 
 trap cleanup INT TERM EXIT
 
+if command -v docker >/dev/null 2>&1; then
+  echo "Ensuring PostgreSQL container is running..."
+  (cd "$ROOT" && (docker compose up -d db >/dev/null 2>&1 || docker-compose up -d db >/dev/null 2>&1 || true))
+fi
+
 (
   cd "$ROOT/backend"
   "$BACKEND_PYTHON" -m uvicorn app.main:app --reload

@@ -1,9 +1,38 @@
 services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-medicaps_lms}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-medicaps_lms}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c work_mem=16MB
+      -c maintenance_work_mem=64MB
+      -c effective_cache_size=1GB
+      -c max_connections=100
+      -c random_page_cost=4.0
+
   backend:
     build:
       context: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
-      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:////app/data/lms.db}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-medicaps_lms}}
       DATA_DIR: /app/data
       SECRET_KEY: ${SECRET_KEY:-replace-this-secret-before-production}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
@@ -12,10 +41,9 @@ services:
       UPLOAD_DIR: /app/data/uploads
       VIDEO_UPLOAD_DIR: /app/data/uploads/videos
       CERTIFICATE_DIR: /app/data/certificates
-      MAX_VIDEO_SIZE_MB: ${MAX_VIDEO_SIZE_MB:-500}
-      BASE_URL: ${BASE_URL:-http://localhost:8000}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+      BASE_URL: ${BASE_URL:-https://apimedicapslms.chetancj.in}
+      FRONTEND_URL: ${FRONTEND_URL:-https://medicapslms.chetancj.in}
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000","https://medicapslms.chetancj.in"]}
     volumes:
       - ./data:/app/data
     ports:
@@ -26,11 +54,17 @@ services:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://apimedicapslms.chetancj.in}
         INTERNAL_API_URL: http://backend:8000
+    environment:
+      INTERNAL_API_URL: http://backend:8000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://apimedicapslms.chetancj.in}
     depends_on:
       backend:
         condition: service_healthy
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     restart: unless-stopped
+
+volumes:
+  postgres_data:

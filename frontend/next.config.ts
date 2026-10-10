@@ -3,9 +3,6 @@ import { environment } from "./src/config/environment";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  experimental: {
-    cpus: 1,
-  },
   async rewrites() {
     const internalApiUrl = process.env.INTERNAL_API_URL || environment.apiUrl;
 

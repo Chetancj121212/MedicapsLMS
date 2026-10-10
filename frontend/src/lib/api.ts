@@ -4,7 +4,7 @@ export const API_BASE = environment.apiUrl;
 export const BACKUP_API_BASE = environment.backupApiUrl;
 
 export function getCertificateDownloadUrl(certificateNumber: string): string {
-  return `${API_BASE}/api/certificates/${certificateNumber}/download`;
+  return `/api/certificates/${encodeURIComponent(certificateNumber)}/download`;
 }
 
 interface FetchOptions extends RequestInit {

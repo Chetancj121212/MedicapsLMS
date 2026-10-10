@@ -54,7 +54,7 @@ async def get_my_certificates(
             "course_title": c.course.title if c.course else "ECE Course",
             "issued_at": c.issued_at.strftime("%d %B %Y"),
             "is_revoked": c.is_revoked,
-            "download_url": f"{settings.BASE_URL}{c.certificate_file}" if c.certificate_file else None,
+            "download_url": f"{settings.BASE_URL.rstrip('/')}/api/certificates/{c.certificate_number}/download" if c.certificate_number else None,
         }
         for c in certs
     ]

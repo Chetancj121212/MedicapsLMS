@@ -113,7 +113,7 @@ export function LearningJourneySection() {
   return (
     <section
       id="learning-journey"
-      className="scroll-mt-24 scroll-snap-align-start scroll-snap-stop-always relative overflow-hidden bg-[#F7F8FA] pb-16 pt-6 sm:pb-20 sm:pt-8 lg:pb-24 lg:pt-12"
+      className="scroll-mt-24 relative overflow-hidden bg-[#F7F8FA] pb-16 pt-6 sm:pb-20 sm:pt-8 lg:pb-24 lg:pt-12"
     >
       <div
         aria-hidden="true"

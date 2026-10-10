@@ -5,7 +5,8 @@ Courseportel is a small Learning Management System for the Medicaps University E
 ## Stack
 
 - Frontend: Next.js App Router, React, TypeScript, Tailwind CSS, Lucide React
-- Backend: FastAPI, SQLAlchemy, Pydantic, SQLite for local development
+- Backend: FastAPI, SQLAlchemy, asyncpg, Pydantic
+- Database: PostgreSQL (Docker Compose)
 - Media and certificates: local video storage, ReportLab PDFs, QR verification
 
 ## Project Structure
@@ -48,8 +49,8 @@ The frontend runs at `http://localhost:3000` and the API at `http://localhost:80
 
 ## Docker Compose
 
-Docker Compose runs the frontend and FastAPI backend together and persists the
-SQLite database, uploaded videos, and generated certificates in `data/`.
+Docker Compose runs the frontend, FastAPI backend, and PostgreSQL database together.
+Uploaded videos and generated certificates persist in `data/`, and database records persist in the `postgres_data` volume.
 
 ```powershell
 Copy-Item .env.example .env
@@ -92,4 +93,4 @@ target environment.
 
 ## Future Plan
 
-The MVP is intentionally SQLite-backed and keeps demo data easy to replace. Future work can add API/database-backed course administration, production secret management, and PostgreSQL without changing the current page flows.
+The application is backed by PostgreSQL with async SQLAlchemy and asyncpg. Future work can add API/database-backed course administration, production secret management, and external object storage without changing the current page flows.

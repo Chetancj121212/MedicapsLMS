@@ -4,7 +4,7 @@ import { CampusHeroImage } from "./CampusHeroImage";
 
 export function HeroSection() {
   return (
-    <section className="w-full bg-[#FAFBFD] relative overflow-hidden scroll-mt-24 scroll-snap-align-start scroll-snap-stop-always">
+    <section className="w-full bg-[#FAFBFD] relative overflow-hidden">
       {/* ─── Main Hero Split Content & Campus Photograph ──────────────────── */}
       <div className="relative w-full min-h-[580px] lg:h-[600px] xl:h-[620px] flex items-center">
         {/* ─── Architectural Triangle System ──────────────────────────────── */}

@@ -1,6 +1,4 @@
-"use client";
-
-import React, { useEffect } from "react";
+import React from "react";
 import Link from "next/link";
 import { HeroSection } from "@/components/home/HeroSection";
 import { LearningJourneySection } from "@/components/home/LearningJourneySection";
@@ -8,43 +6,6 @@ import { Button } from "@/components/ui/Button";
 import { Award } from "lucide-react";
 
 export default function HomePage() {
-  useEffect(() => {
-    let lock = false;
-    let lastTop = window.scrollY;
-
-    const handleScroll = () => {
-      if (lock) return;
-
-      const learningSection = document.getElementById("learning-journey");
-      if (!learningSection) return;
-
-      const rect = learningSection.getBoundingClientRect();
-      const headerOffset = 92;
-      const targetScrollY = window.scrollY + rect.top - headerOffset;
-      const isUserScrollingDown = window.scrollY > lastTop;
-      const isNearTarget =
-        rect.top <= window.innerHeight * 0.9 &&
-        rect.top >= -window.innerHeight * 0.25 &&
-        window.scrollY < targetScrollY + 120;
-
-      if (isUserScrollingDown && isNearTarget) {
-        lock = true;
-        window.scrollTo({
-          top: targetScrollY,
-          behavior: "smooth",
-        });
-
-        window.setTimeout(() => {
-          lock = false;
-        }, 1000);
-      }
-
-      lastTop = window.scrollY;
-    };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
 
   return (
     <div className="space-y-14 pb-16">

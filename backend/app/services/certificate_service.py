@@ -369,7 +369,7 @@ class CertificateService:
                 "institution": "Medicaps University, Indore",
                 "issuedAt": cert.issued_at.strftime("%d %B %Y"),
                 "revoked": False,
-                "downloadUrl": f"{settings.BASE_URL}{cert.certificate_file}" if cert.certificate_file else None,
+                "downloadUrl": f"{settings.BASE_URL.rstrip('/')}/api/certificates/{cert.certificate_number}/download" if cert.certificate_number else None,
             },
         }
 
