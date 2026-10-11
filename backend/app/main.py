@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.banner import ASCII_BANNER, MAINTAINED_BY, PLAIN_TEXT_RESPONSE, get_landing_html
+from app.banner import ASCII_BANNER, MAINTAINED_BY, PLAIN_TEXT_RESPONSE, get_landing_html, get_plain_text_response
 from app.config import settings
 from app.database import init_db, engine, check_database_health
 from app.routers import auth, courses, lectures, quizzes, certificates, students, admin, addadmins
@@ -69,14 +69,18 @@ app.include_router(addadmins.router)
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    """Root endpoint displaying Server Alive ASCII banner and maintainer attribution."""
+    """Root endpoint displaying minimal Server Alive ASCII banner and database status."""
     user_agent = request.headers.get("user-agent", "").lower()
     accept = request.headers.get("accept", "").lower()
+
+    db_ok = await check_database_health()
+    db_status = "ONLINE" if db_ok else "OFFLINE"
 
     # JSON requested explicitly
     if "application/json" in accept and "text/html" not in accept:
         return JSONResponse({
             "status": "SERVER ALIVE",
+            "database": "connected" if db_ok else "disconnected",
             "message": "Medicaps University ECE LMS API is online and operational",
             "maintained_by": MAINTAINED_BY,
             "author": "@chetancj",
@@ -94,11 +98,13 @@ async def root(request: Request):
     if any(agent in user_agent for agent in ("curl", "wget", "httpie", "powershell")) or (
         "text/plain" in accept and "text/html" not in accept
     ):
-        return PlainTextResponse(content=PLAIN_TEXT_RESPONSE, media_type="text/plain; charset=utf-8")
+        return PlainTextResponse(
+            content=get_plain_text_response(db_status),
+            media_type="text/plain; charset=utf-8",
+        )
 
-    # Web browsers / default: Modern dark-mode terminal landing page
-    base_url = str(request.base_url).rstrip("/")
-    return HTMLResponse(content=get_landing_html(base_url), status_code=200)
+    # Web browsers / default: Minimal black and white landing page
+    return HTMLResponse(content=get_landing_html(db_status=db_status), status_code=200)
 
 
 @app.get("/favicon.ico", include_in_schema=False)
