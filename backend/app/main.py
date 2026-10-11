@@ -23,6 +23,22 @@ async def lifespan(app: FastAPI):
 
     # Initialize database tables
     await init_db()
+
+    # Automatically seed initial courses and accounts if database is empty
+    try:
+        from sqlalchemy import select, func
+        from app.models.course import Course
+        from app.database import async_session
+        async with async_session() as db:
+            course_count = (await db.execute(select(func.count(Course.id)))).scalar_one()
+            if course_count == 0:
+                logger.info("Empty course catalog detected. Running automatic initial seed...")
+                from app.seed import seed
+                await seed()
+                logger.info("Automatic initial seed completed successfully.")
+    except Exception as e:
+        logger.warning(f"Initial seed check skipped: {e}")
+
     yield
     # Graceful shutdown: clean up connection pool
     logger.info("Closing database engine connections on shutdown...")

@@ -104,6 +104,21 @@ jobs:
           docker compose up -d --build
 
       # ---------------------------------------------------------
+      # 5. Seed initial course catalog
+      # ---------------------------------------------------------
+      - name: Seed database
+        shell: powershell
+        run: |
+          Set-Location "F:\CoursePortal"
+
+          Write-Host "======================================"
+          Write-Host " Seeding course catalog and admin"
+          Write-Host "======================================"
+
+          docker compose exec -T backend python -m app.seed
+
+
+      # ---------------------------------------------------------
       # 5. Check containers
       # ---------------------------------------------------------
       - name: Check deployment
