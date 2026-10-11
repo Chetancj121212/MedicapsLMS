@@ -533,8 +533,8 @@ export function VideoPlayer({
           isCompleted={completedRef.current || isCompleted}
           isGoogleDrive={true}
           hasNext={hasNext}
-          onCompleteNext={() => {
-            void handlePlaybackEnded();
+          onCompleteNext={async () => {
+            await handlePlaybackEnded();
             onNext?.();
           }}
         />
@@ -620,8 +620,8 @@ export function VideoPlayer({
           isCompleted={completedRef.current || isCompleted}
           isGoogleDrive={false}
           hasNext={hasNext}
-          onCompleteNext={() => {
-            void handlePlaybackEnded();
+          onCompleteNext={async () => {
+            await handlePlaybackEnded();
             onNext?.();
           }}
         />
@@ -662,8 +662,8 @@ export function VideoPlayer({
         isCompleted={completedRef.current || isCompleted}
         isGoogleDrive={false}
         hasNext={hasNext}
-        onCompleteNext={() => {
-          void handlePlaybackEnded();
+        onCompleteNext={async () => {
+          await handlePlaybackEnded();
           onNext?.();
         }}
       />
@@ -684,7 +684,7 @@ function LectureActionFooter({
   isCompleted: boolean;
   isGoogleDrive: boolean;
   hasNext?: boolean;
-  onCompleteNext: () => void;
+  onCompleteNext: () => void | Promise<void>;
 }) {
   const eligible = isCompleted || watchPercentage >= threshold || isGoogleDrive;
 

@@ -318,21 +318,42 @@ export default function CourseLearningPage() {
   );
 
   const handleCourseCompletion = useCallback(async () => {
-    await loadStatus();
-    confetti({
-      particleCount: 160,
-      spread: 90,
-      origin: { y: 0.6 },
-    });
-    window.setTimeout(() => {
-      const card = document.getElementById("certificate-completion-card");
-      if (card) {
-        card.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Retry loadStatus a few times — the backend needs a moment to issue
+    // the certificate after the last lecture progress POST completes.
+    let certFound = false;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, 1200));
       }
-    }, 350);
+      try {
+        await loadStatus();
+      } catch {
+        // network hiccup — keep retrying
+        continue;
+      }
+      // Check if certificate card appeared in the DOM
+      if (document.getElementById("certificate-completion-card")) {
+        certFound = true;
+        break;
+      }
+    }
+
+    if (certFound) {
+      confetti({
+        particleCount: 160,
+        spread: 90,
+        origin: { y: 0.6 },
+      });
+      window.setTimeout(() => {
+        const card = document.getElementById("certificate-completion-card");
+        if (card) {
+          card.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 350);
+    }
   }, [loadStatus]);
 
-  const handleNextItem = useCallback(() => {
+  const handleNextItem = useCallback(async () => {
     if (!curriculum || !selectedItem) return;
 
     const items = [
@@ -347,7 +368,7 @@ export default function CourseLearningPage() {
       selectContentItem({ ...nextItem, is_locked: false });
     } else {
       // If no next item exists in the course, generate certificate & trigger completion
-      void handleCourseCompletion();
+      await handleCourseCompletion();
     }
   }, [curriculum, selectContentItem, selectedItem, handleCourseCompletion]);
 
