@@ -23,11 +23,13 @@ export async function GET(
 
   for (const backendUrl of candidateUrls) {
     try {
-      const backendRes = await fetch(backendUrl);
+      const backendRes = await fetch(backendUrl, {
+        signal: AbortSignal.timeout(15000),
+      });
 
       if (!backendRes.ok) {
         lastStatus = backendRes.status;
-        lastErrorMessage = "Certificate not found on server";
+        lastErrorMessage = `Certificate service returned HTTP ${backendRes.status}`;
         continue;
       }
 

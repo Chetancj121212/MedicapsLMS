@@ -43,7 +43,7 @@ export function Header() {
             className="-mr-2 sm:-mr-4 text-[#f7f1e8]/40 hover:text-[#f7f1e8] transition-colors text-[10px] font-normal tracking-wide"
             style={{ fontFamily: "Fredoka, sans-serif" }}
           >
-            Developed by Chetan CJ
+            Designed & Developed by Chetan CJ
           </Link>
         </div>
       </div>

@@ -203,7 +203,7 @@ export default function AdminCoursesListPage() {
           className="bg-primary hover:bg-primary-dark text-white gap-2 font-medium shadow-xs"
         >
           <Plus className="w-4 h-4" />
-          <span>+ Create New Course</span>
+          <span>Create New Course</span>
         </Button>
       </div>
 

@@ -63,36 +63,73 @@ async def get_my_certificates(
 @router.get("/{certificate_number}/download")
 async def download_certificate(certificate_number: str, db: AsyncSession = Depends(get_db)):
     """Serves the generated PDF certificate."""
-    stmt = (
-        select(Certificate)
-        .where(Certificate.certificate_number == certificate_number)
-        .options(selectinload(Certificate.student), selectinload(Certificate.course))
-    )
-    res = await db.execute(stmt)
-    cert = res.scalar_one_or_none()
-    if not cert:
-        raise HTTPException(status_code=404, detail="Certificate not found")
+    try:
+        stmt = (
+            select(Certificate)
+            .where(Certificate.certificate_number == certificate_number)
+            .options(selectinload(Certificate.student), selectinload(Certificate.course))
+        )
+        res = await db.execute(stmt)
+        cert = res.scalar_one_or_none()
+        if not cert:
+            raise HTTPException(status_code=404, detail="Certificate not found")
 
-    cert_dir = os.path.abspath(settings.CERTIFICATE_DIR)
-    os.makedirs(cert_dir, exist_ok=True)
-    pdf_path = os.path.join(cert_dir, f"{certificate_number}.pdf")
+        cert_dir = os.path.abspath(settings.CERTIFICATE_DIR)
+        os.makedirs(cert_dir, exist_ok=True)
+        pdf_path = os.path.join(cert_dir, f"{certificate_number}.pdf")
 
-    if not os.path.exists(pdf_path):
-        qr_path = os.path.join(cert_dir, f"{certificate_number}_qr.png")
-        verify_url = f"{settings.FRONTEND_URL}/verify/{certificate_number}"
-        certificate_service.generate_qr_code(verify_url, qr_path)
-        certificate_service.generate_pdf(
-            certificate_number=certificate_number,
-            student_name=cert.student.full_name if cert.student else "Student",
-            enrollment_number=cert.student.enrollment_number if cert.student else "N/A",
-            course_name=cert.course.title if cert.course else "Course",
-            completion_date=cert.issued_at.strftime("%d %B %Y") if cert.issued_at else "2026",
-            qr_image_path=qr_path,
-            output_pdf_path=pdf_path,
+        # Generate or regenerate if file is missing or 0 bytes
+        if not os.path.exists(pdf_path) or os.path.getsize(pdf_path) == 0:
+            qr_path = os.path.join(cert_dir, f"{certificate_number}_qr.png")
+            verify_url = f"{settings.FRONTEND_URL}/verify/{certificate_number}"
+            certificate_service.generate_qr_code(verify_url, qr_path)
+
+            student_name = "Student"
+            enrollment_num = "N/A"
+            if cert.student:
+                student_name = cert.student.full_name or "Student"
+                enrollment_num = cert.student.enrollment_number or "N/A"
+
+            course_title = (
+                cert.course.title
+                if cert.course and cert.course.title
+                else "Introduction to Embedded Systems"
+            )
+            completion_date = (
+                cert.issued_at.strftime("%d %B %Y")
+                if cert.issued_at
+                else datetime.utcnow().strftime("%d %B %Y")
+            )
+
+            certificate_service.generate_pdf(
+                certificate_number=certificate_number,
+                student_name=student_name,
+                enrollment_number=enrollment_num,
+                course_name=course_title,
+                completion_date=completion_date,
+                qr_image_path=qr_path,
+                output_pdf_path=pdf_path,
+            )
+
+        if not os.path.exists(pdf_path) or os.path.getsize(pdf_path) == 0:
+            raise HTTPException(
+                status_code=500,
+                detail="Unable to generate certificate PDF file.",
+            )
+
+        return FileResponse(
+            pdf_path,
+            media_type="application/pdf",
+            filename=f"Medicaps_Certificate_{certificate_number}.pdf",
+            headers={
+                "Content-Disposition": f'inline; filename="Medicaps_Certificate_{certificate_number}.pdf"'
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Certificate generation error: {str(exc)}",
         )
 
-    return FileResponse(
-        pdf_path,
-        media_type="application/pdf",
-        filename=f"Medicaps_Certificate_{certificate_number}.pdf",
-    )

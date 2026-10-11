@@ -97,8 +97,7 @@ function parseYoutubeId(url: string) {
 
 const focused = () =>
   typeof document !== "undefined" &&
-  document.visibilityState === "visible" &&
-  document.hasFocus();
+  document.visibilityState === "visible";
 
 export function VideoPlayer({
   lectureId,
@@ -165,9 +164,12 @@ export function VideoPlayer({
   const handlePlaybackEnded = useCallback(() => {
     if (endHandledRef.current) return;
     endHandledRef.current = true;
+    setWatchPercentage(100);
+    completedRef.current = true;
     void syncRef.current(true);
+    onCompleted?.();
     if (onNextRef.current) setCountdown(3);
-  }, []);
+  }, [onCompleted]);
 
   useEffect(() => {
     if (countdown === null) return;
@@ -248,12 +250,18 @@ export function VideoPlayer({
 
   const sync = useCallback(
     async (finalize = false) => {
-      void finalize;
       if (inFlightRef.current) return;
       const player = playerRef.current;
       const current =
         Number(getPlayerCurrentTime(player) ?? lastPositionRef.current) || 0;
       const playerDuration = Number(getPlayerDuration(player) ?? duration ?? 0);
+      const effectivePct =
+        finalize || completedRef.current
+          ? 100
+          : playerDuration
+            ? Math.min(100, (playTimeRef.current / playerDuration) * 100)
+            : 0;
+
       inFlightRef.current = true;
       try {
         const response = await fetchApi<{
@@ -266,9 +274,7 @@ export function VideoPlayer({
           method: "POST",
           body: JSON.stringify({
             watched_seconds: playTimeRef.current,
-            completion_percentage: playerDuration
-              ? (playTimeRef.current / playerDuration) * 100
-              : 0,
+            completion_percentage: effectivePct,
             last_position_seconds: current,
             duration: playerDuration || undefined,
             video_play_time_seconds: playTimeRef.current,

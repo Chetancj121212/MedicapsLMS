@@ -79,10 +79,11 @@ class CertificateService:
         output_pdf_path: str,
     ) -> str:
         """Generate an A4 landscape certificate using the existing certificate data."""
-        os.makedirs(os.path.dirname(output_pdf_path), exist_ok=True)
+        abs_output_path = os.path.abspath(output_pdf_path)
+        os.makedirs(os.path.dirname(abs_output_path), exist_ok=True)
         width, height = landscape(A4)  # 841.89 x 595.27 points
 
-        c = canvas.Canvas(output_pdf_path, pagesize=landscape(A4))
+        c = canvas.Canvas(abs_output_path, pagesize=landscape(A4))
 
         navy = colors.HexColor("#1B3A6B")
         crimson = colors.HexColor("#9A1E33")
@@ -137,6 +138,7 @@ class CertificateService:
             c.restoreState()
 
         def centered_paragraph(text: str, y: float, font: str, size: float, color: colors.Color, max_width: float, leading: float) -> None:
+            safe_text = escape(str(text or ""))
             style = ParagraphStyle(
                 "certificate_centered",
                 fontName=font,
@@ -146,7 +148,7 @@ class CertificateService:
                 alignment=1,
                 spaceAfter=0,
             )
-            paragraph = Paragraph(escape(text), style)
+            paragraph = Paragraph(safe_text, style)
             paragraph.wrapOn(c, max_width, 80)
             paragraph.drawOn(c, width / 2.0 - max_width / 2.0, y)
 
@@ -166,8 +168,13 @@ class CertificateService:
         c.rect(31, 31, width - 62, height - 62)
 
         # Compact official branding block.
-        logo_path = Path(__file__).resolve().parents[3] / "frontend" / "public" / "medicaps-logo.png"
-        if logo_path.exists():
+        logo_candidates = [
+            Path(__file__).resolve().parents[3] / "frontend" / "public" / "medicaps-logo.png",
+            Path(__file__).resolve().parents[2] / "frontend" / "public" / "medicaps-logo.png",
+            Path("/app/public/medicaps-logo.png"),
+        ]
+        logo_path = next((p for p in logo_candidates if p.exists()), None)
+        if logo_path:
             c.drawImage(str(logo_path), 66, height - 93, width=122, height=37, preserveAspectRatio=True, mask="auto")
         c.setFillColor(navy)
         c.setFont(sans_bold, 22)

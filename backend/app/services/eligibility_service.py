@@ -102,7 +102,7 @@ class EligibilityService:
             return False
 
         # If already marked completed by the tracking system, trust it
-        if progress.completed:
+        if progress.completed or (progress.completion_percentage and progress.completion_percentage >= 100.0):
             return True
 
         eff_duration = lecture.duration or 0.0
@@ -119,9 +119,12 @@ class EligibilityService:
         )
         watch_pct = min(100.0, round((play_time / eff_duration) * 100.0, 1))
 
-        # Active screen time must be >= 60% of lecture duration
-        active_time = progress.active_screen_time_seconds or 0.0
-        meets_watch = watch_pct >= threshold_pct
+        # Active screen time must be >= 60% of lecture duration (with play_time fallback for iframe focus)
+        active_time = max(
+            progress.active_screen_time_seconds or 0.0,
+            play_time * 0.75 if play_time > 0 else 0.0,
+        )
+        meets_watch = watch_pct >= threshold_pct or (progress.completion_percentage and progress.completion_percentage >= 100.0)
         meets_active = active_time >= (eff_duration * 0.6)
 
         return meets_watch and meets_active

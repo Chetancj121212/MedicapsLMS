@@ -131,28 +131,34 @@ class ProgressService:
         )
 
         # Active Screen Time: only when video is in PLAYING state and tab is focused/visible
-        current_active_time = max(
+        # Fallback to 75% of play time if browser iframe focus caused focus loss on the parent tab
+        raw_active_time = max(
             progress.active_screen_time_seconds if progress else 0.0,
             float(active_screen_time_seconds or 0.0),
         )
+        current_active_time = max(raw_active_time, current_play_time * 0.75) if current_play_time > 0 else raw_active_time
+
+        client_reported_pct = float(completion_percentage or 0.0)
 
         if eff_duration > 0:
             # Video watch percentage = total accumulated playback time / lecture duration
             watch_ratio = current_play_time / eff_duration
             watch_pct = min(100.0, round(watch_ratio * 100.0, 1))
+            effective_watch_pct = max(watch_pct, client_reported_pct)
 
             # Active screen time requirement is at least 60% of lecture duration
             meets_active_threshold = current_active_time >= (eff_duration * 0.6)
 
             # Video watch percentage must be >= admin-configured threshold
-            meets_watch_threshold = watch_pct >= threshold_pct
+            meets_watch_threshold = effective_watch_pct >= threshold_pct
 
-            # Both conditions must be satisfied (AND logic)
-            is_now_completed = is_already_done or (meets_watch_threshold and meets_active_threshold)
-            final_pct = 100.0 if is_now_completed else watch_pct
+            # Both conditions satisfied OR client reached 100% completion
+            is_now_completed = is_already_done or (meets_watch_threshold and meets_active_threshold) or (client_reported_pct >= 100.0)
+            final_pct = 100.0 if is_now_completed else effective_watch_pct
         else:
-            is_now_completed = is_already_done
-            final_pct = 100.0 if is_now_completed else 0.0
+            is_now_completed = is_already_done or (client_reported_pct >= 100.0)
+            final_pct = 100.0 if is_now_completed else client_reported_pct
+
 
         if not progress:
             progress = LectureProgress(
