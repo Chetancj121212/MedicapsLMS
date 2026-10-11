@@ -93,18 +93,54 @@ jobs:
       - name: Build and restart LMS
         shell: powershell
         run: |
-          $ErrorActionPreference = "Stop"
-
           Set-Location "F:\CoursePortal"
 
           Write-Host "======================================"
           Write-Host " Building and starting Medicaps LMS"
           Write-Host "======================================"
 
-          # Clean up any lingering or conflicting stopped containers before recreation
-          docker rm -f courseportal-backend-1 courseportal-frontend-1 2>$null
+          # Safely remove existing containers without aborting on NativeCommandError
+          $rmOutput = docker rm -f courseportal-backend-1 courseportal-frontend-1 2>&1 | Out-String
+          Write-Host $rmOutput
 
+          # If container is stuck in WSL2 kernel/containerd, auto-recover by restarting WSL
+          if ($rmOutput -like "*tried to kill container, but did not receive an exit event*") {
+              Write-Host "=========================================================="
+              Write-Host " Detected stuck container in WSL2! Performing auto-recovery..."
+              Write-Host "=========================================================="
+              wsl --shutdown
+              Start-Sleep -Seconds 12
+
+              Write-Host "Waiting for Docker daemon to reconnect..."
+              for ($i = 0; $i -lt 30; $i++) {
+                  docker info 2>&1 | Out-Null
+                  if ($LASTEXITCODE -eq 0) {
+                      Write-Host "Docker daemon reconnected successfully!"
+                      break
+                  }
+                  Start-Sleep -Seconds 2
+              }
+
+              docker rm -f courseportal-backend-1 courseportal-frontend-1 2>&1 | Out-Null
+          }
+
+          # Start new containers
           docker compose up -d --build --force-recreate
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "First compose attempt failed, checking for stuck WSL state..."
+              wsl --shutdown
+              Start-Sleep -Seconds 12
+              for ($i = 0; $i -lt 30; $i++) {
+                  docker info 2>&1 | Out-Null
+                  if ($LASTEXITCODE -eq 0) { break }
+                  Start-Sleep -Seconds 2
+              }
+              docker compose up -d --build --force-recreate
+              if ($LASTEXITCODE -ne 0) {
+                  Write-Error "Docker compose up failed."
+                  exit 1
+              }
+          }
 
       # ---------------------------------------------------------
       # 5. Seed initial course catalog
@@ -118,6 +154,7 @@ jobs:
           Write-Host " Seeding course catalog and admin"
           Write-Host "======================================"
 
+          Start-Sleep -Seconds 5
           docker compose exec -T backend python -m app.seed
 
 
