@@ -40,9 +40,13 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Initial seed check skipped: {e}")
 
     yield
-    # Graceful shutdown: clean up connection pool
+    # Graceful shutdown: clean up connection pool (guarded with timeout)
     logger.info("Closing database engine connections on shutdown...")
-    await engine.dispose()
+    try:
+        import asyncio
+        await asyncio.wait_for(engine.dispose(), timeout=5.0)
+    except Exception as exc:
+        logger.warning(f"Database engine dispose timed out or failed: {exc}")
     logger.info("Database engine connections closed.")
 
 
