@@ -101,7 +101,10 @@ jobs:
           Write-Host " Building and starting Medicaps LMS"
           Write-Host "======================================"
 
-          docker compose up -d --build
+          # Clean up any lingering or conflicting stopped containers before recreation
+          docker rm -f courseportal-backend-1 courseportal-frontend-1 2>$null
+
+          docker compose up -d --build --force-recreate
 
       # ---------------------------------------------------------
       # 5. Seed initial course catalog

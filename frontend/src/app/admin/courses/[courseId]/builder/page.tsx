@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { Tooltip } from "@/components/ui/Tooltip";
 import {
   Plus,
   Video,
@@ -24,6 +25,7 @@ import {
   Clock,
   CheckCircle2,
   Sparkles,
+  ExternalLink,
 } from "lucide-react";
 import { formatDuration } from "@/lib/utils";
 
@@ -740,53 +742,83 @@ export default function CourseBuilderPage() {
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to All Courses</span>
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <h1 className="text-2xl sm:text-3xl font-semibold text-text-primary tracking-tight">
               Course Builder: {course.course_code}
             </h1>
             <Badge
               variant={course.status === "PUBLISHED" ? "success" : "secondary"}
-              className="text-xs font-semibold"
+              className="text-[11px] font-semibold tracking-wider uppercase px-2 py-0.5"
             >
               {course.status}
             </Badge>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleDeleteCurrentCourse}
-            className="text-rose-600 border-rose-200 hover:bg-rose-50 hover:border-rose-300"
-          >
-            <Trash2 className="w-4 h-4 mr-1.5" />
-            <span>Delete Course</span>
-          </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Tooltip content="Delete Course">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleDeleteCurrentCourse}
+              className="h-9 w-9 p-0 text-rose-600 border-rose-200 hover:bg-rose-50 hover:border-rose-300 hover:text-rose-700 transition-colors"
+              aria-label="Delete Course"
+              title="Delete Course"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </Tooltip>
 
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleTogglePublish}
-            className={
+          <Tooltip
+            content={
               course.status === "PUBLISHED"
-                ? "text-amber-700 border-amber-300"
-                : "text-emerald-700 border-emerald-300"
+                ? "Unpublish to Draft"
+                : "Publish Course Live"
             }
           >
-            <Globe className="w-4 h-4 mr-1.5" />
-            <span>
-              {course.status === "PUBLISHED"
-                ? "Unpublish to Draft"
-                : "Publish Course Live"}
-            </span>
-          </Button>
-
-          <Link href={`/courses/${course.id}`} target="_blank">
-            <Button variant="ghost" size="sm">
-              Public Preview &rarr;
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleTogglePublish}
+              className={
+                course.status === "PUBLISHED"
+                  ? "h-9 w-9 p-0 text-amber-700 border-amber-300 hover:bg-amber-50"
+                  : "h-9 w-9 p-0 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+              }
+              aria-label={
+                course.status === "PUBLISHED"
+                  ? "Unpublish to Draft"
+                  : "Publish Course Live"
+              }
+              title={
+                course.status === "PUBLISHED"
+                  ? "Unpublish to Draft"
+                  : "Publish Course Live"
+              }
+            >
+              <Globe className="w-4 h-4" />
             </Button>
-          </Link>
+          </Tooltip>
+
+          <Tooltip content="Public Preview">
+            <Link
+              href={`/courses/${course.id}`}
+              target="_blank"
+              className="inline-flex"
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 w-9 p-0 text-slate-700 border-slate-200 hover:bg-slate-50 hover:text-primary"
+                aria-label="Public Preview"
+                title="Public Preview"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </Button>
+            </Link>
+          </Tooltip>
         </div>
       </div>
 
@@ -940,59 +972,70 @@ export default function CourseBuilderPage() {
 
                   {/* Content & Action Buttons */}
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setActiveModuleId(mod.id);
-                        setLecTitle("");
-                        setLecDesc("");
-                        setLecFile(null);
-                        setLecUrl("");
-                        setLecDuration("");
-                        setDurationAutoDetected(false);
-                        setIsFetchingDuration(false);
-                        setShowAddLectureModal(true);
-                      }}
-                      className="gap-1.5 text-xs text-blue-900 border-blue-200 hover:bg-blue-50 h-8"
-                    >
-                      <Video className="w-3.5 h-3.5 text-blue-700" />
-                      <span>+ Lecture</span>
-                    </Button>
+                    <Tooltip content="Add Video Lecture">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setActiveModuleId(mod.id);
+                          setLecTitle("");
+                          setLecDesc("");
+                          setLecFile(null);
+                          setLecUrl("");
+                          setLecDuration("");
+                          setDurationAutoDetected(false);
+                          setIsFetchingDuration(false);
+                          setShowAddLectureModal(true);
+                        }}
+                        className="h-8 w-8 p-0 text-blue-900 border-blue-200 hover:bg-blue-50 hover:border-blue-300"
+                        title="Add Video Lecture"
+                        aria-label="Add Video Lecture"
+                      >
+                        <Video className="w-4 h-4 text-blue-700" />
+                      </Button>
+                    </Tooltip>
 
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setActiveModuleId(mod.id);
-                        setShowAddQuizModal(true);
-                      }}
-                      className="gap-1.5 text-xs text-amber-900 border-amber-200 hover:bg-amber-50 h-8"
-                    >
-                      <FileQuestion className="w-3.5 h-3.5 text-amber-700" />
-                      <span>+ Quiz</span>
-                    </Button>
+                    <Tooltip content="Add Quiz / Assessment">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setActiveModuleId(mod.id);
+                          setShowAddQuizModal(true);
+                        }}
+                        className="h-8 w-8 p-0 text-amber-900 border-amber-200 hover:bg-amber-50 hover:border-amber-300"
+                        title="Add Quiz"
+                        aria-label="Add Quiz"
+                      >
+                        <FileQuestion className="w-4 h-4 text-amber-700" />
+                      </Button>
+                    </Tooltip>
 
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleStartEditModule(mod)}
-                      className="h-8 text-xs text-slate-700 hover:text-primary px-2"
-                      title="Edit Module Title/Description"
-                    >
-                      <Edit3 className="w-3.5 h-3.5 mr-1" />
-                      <span>Edit</span>
-                    </Button>
+                    <Tooltip content="Edit Module">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleStartEditModule(mod)}
+                        className="h-8 w-8 p-0 text-slate-600 hover:text-primary hover:bg-slate-100"
+                        title="Edit Module"
+                        aria-label="Edit Module"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </Button>
+                    </Tooltip>
 
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDeleteModule(mod.id, mod.title)}
-                      className="h-8 text-xs text-rose-600 hover:bg-rose-50 px-2"
-                      title="Delete Module"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                    <Tooltip content="Delete Module">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteModule(mod.id, mod.title)}
+                        className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700 border border-transparent hover:border-rose-200"
+                        title="Delete Module"
+                        aria-label="Delete Module"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </Tooltip>
                   </div>
                 </div>
 
@@ -1039,27 +1082,32 @@ export default function CourseBuilderPage() {
                                     ? "YouTube"
                                     : "MP4 Lecture"}
                               </Badge>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleStartEditLecture(lec)}
-                                className="h-7 text-[11px] text-slate-600 hover:text-primary px-2"
-                                title="Edit Lecture"
-                              >
-                                <Edit3 className="w-3 h-3 mr-1" />
-                                <span>Edit</span>
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() =>
-                                  handleDeleteLecture(lec.id, lec.title)
-                                }
-                                className="h-7 text-[11px] text-rose-600 hover:bg-rose-50 px-2"
-                                title="Delete Lecture"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
+                              <Tooltip content="Edit Lecture">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleStartEditLecture(lec)}
+                                  className="h-7 w-7 p-0 text-slate-600 hover:text-primary hover:bg-slate-100"
+                                  title="Edit Lecture"
+                                  aria-label="Edit Lecture"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </Button>
+                              </Tooltip>
+                              <Tooltip content="Delete Lecture">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    handleDeleteLecture(lec.id, lec.title)
+                                  }
+                                  className="h-7 w-7 p-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700 border border-transparent hover:border-rose-200"
+                                  title="Delete Lecture"
+                                  aria-label="Delete Lecture"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </Tooltip>
                             </div>
                           </div>
                         ),
@@ -1086,35 +1134,42 @@ export default function CourseBuilderPage() {
                           </div>
 
                           <div className="flex items-center gap-1.5 shrink-0">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleManageQuizQuestions(qz)}
-                              className="h-7 text-[11px] text-indigo-700 border-indigo-200 hover:bg-indigo-50 px-2.5 gap-1 font-medium"
-                              title="Manage Questions in Quiz"
-                            >
-                              <ListOrdered className="w-3 h-3" />
-                              <span>Questions</span>
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleStartEditQuiz(qz)}
-                              className="h-7 text-[11px] text-slate-600 hover:text-primary px-2"
-                              title="Edit Quiz Details"
-                            >
-                              <Edit3 className="w-3 h-3 mr-1" />
-                              <span>Edit</span>
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDeleteQuiz(qz.id, qz.title)}
-                              className="h-7 text-[11px] text-rose-600 hover:bg-rose-50 px-2"
-                              title="Delete Quiz"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
+                            <Tooltip content="Manage Questions">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleManageQuizQuestions(qz)}
+                                className="h-7 w-7 p-0 text-indigo-700 border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300"
+                                title="Manage Questions"
+                                aria-label="Manage Questions"
+                              >
+                                <ListOrdered className="w-3.5 h-3.5" />
+                              </Button>
+                            </Tooltip>
+                            <Tooltip content="Edit Quiz">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleStartEditQuiz(qz)}
+                                className="h-7 w-7 p-0 text-slate-600 hover:text-primary hover:bg-slate-100"
+                                title="Edit Quiz"
+                                aria-label="Edit Quiz"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </Button>
+                            </Tooltip>
+                            <Tooltip content="Delete Quiz">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteQuiz(qz.id, qz.title)}
+                                className="h-7 w-7 p-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700 border border-transparent hover:border-rose-200"
+                                title="Delete Quiz"
+                                aria-label="Delete Quiz"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </Tooltip>
                           </div>
                         </div>
                       ))}
@@ -1937,15 +1992,18 @@ export default function CourseBuilderPage() {
                           {q.question_text}
                         </div>
                         {q.id && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDeleteQuestion(q.id!)}
-                            className="text-rose-600 hover:bg-rose-50 h-7 px-2 shrink-0"
-                            title="Delete this question"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          <Tooltip content="Delete Question">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteQuestion(q.id!)}
+                              className="text-rose-600 hover:bg-rose-50 hover:text-rose-700 h-7 w-7 p-0 shrink-0 border border-transparent hover:border-rose-200"
+                              title="Delete Question"
+                              aria-label="Delete Question"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </Tooltip>
                         )}
                       </div>
 
