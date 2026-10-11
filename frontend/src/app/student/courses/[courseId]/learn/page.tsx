@@ -317,6 +317,21 @@ export default function CourseLearningPage() {
     [courseId, router, selectedItem?.is_completed],
   );
 
+  const handleCourseCompletion = useCallback(async () => {
+    await loadStatus();
+    confetti({
+      particleCount: 160,
+      spread: 90,
+      origin: { y: 0.6 },
+    });
+    window.setTimeout(() => {
+      const card = document.getElementById("certificate-completion-card");
+      if (card) {
+        card.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 350);
+  }, [loadStatus]);
+
   const handleNextItem = useCallback(() => {
     if (!curriculum || !selectedItem) return;
 
@@ -330,8 +345,11 @@ export default function CourseLearningPage() {
     if (currentIndex >= 0 && currentIndex < items.length - 1) {
       const nextItem = items[currentIndex + 1];
       selectContentItem({ ...nextItem, is_locked: false });
+    } else {
+      // If no next item exists in the course, generate certificate & trigger completion
+      void handleCourseCompletion();
     }
-  }, [curriculum, selectContentItem, selectedItem]);
+  }, [curriculum, selectContentItem, selectedItem, handleCourseCompletion]);
 
   if (authLoading || loading) {
     return (
@@ -380,6 +398,18 @@ export default function CourseLearningPage() {
     ? curriculum.modules.indexOf(activeModule) + 1
     : 1;
 
+  // Determine if there's a next item after the currently selected one
+  const allCurriculumItems = [
+    ...curriculum.modules.flatMap((m) => m.items),
+    ...(curriculum.final_quizzes || []),
+  ];
+  const selectedIdx = selectedItem
+    ? allCurriculumItems.findIndex(
+        (it) => it.id === selectedItem.id && it.type === selectedItem.type,
+      )
+    : -1;
+  const hasNextItem = selectedIdx >= 0 && selectedIdx < allCurriculumItems.length - 1;
+
   return (
     <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       {/* ─── Main 80/20 Learning Layout (Expanded Video + Curriculum Rail) ─── */}
@@ -420,6 +450,7 @@ export default function CourseLearningPage() {
                   0
                 }
                 isCompleted={selectedItem.is_completed}
+                hasNext={hasNextItem}
                 onCompleted={handleLectureCompleted}
                 onNext={handleNextItem}
                 onProgressUpdate={handleProgressUpdate}
@@ -487,7 +518,7 @@ export default function CourseLearningPage() {
 
           {/* Certificate Completion Card (shown only upon completion) */}
           {isCourseCompleted && curriculum.certificate && (
-            <div className="rounded-xl bg-white border border-border-subtle p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div id="certificate-completion-card" className="rounded-xl bg-white border border-border-subtle p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="space-y-1 text-center sm:text-left">
                 <div className="text-xs font-semibold text-primary uppercase tracking-wider">
                   Course Completed

@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { fetchApi } from "@/lib/api";
-import { Pause, Play, CheckCircle2, ChevronRight } from "lucide-react";
+import { Pause, Play, CheckCircle2, ChevronRight, Award } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 interface YouTubePlayer {
@@ -66,6 +66,7 @@ interface VideoPlayerProps {
   initialActiveScreenTime?: number;
   initialVideoPlayTime?: number;
   isCompleted?: boolean;
+  hasNext?: boolean;
   onCompleted?: () => void;
   onNext?: () => void;
   onProgressUpdate?: (
@@ -112,6 +113,7 @@ export function VideoPlayer({
   initialActiveScreenTime = 0,
   initialVideoPlayTime = 0,
   isCompleted = false,
+  hasNext = true,
   onCompleted,
   onNext,
   onProgressUpdate,
@@ -519,13 +521,18 @@ export function VideoPlayer({
         </div>
         <VideoProgressBar playing={isPlaying} progress={watchPercentage} />
         {countdown !== null && onNext && (
-          <NextLecturePrompt countdown={countdown} onNext={onNext} />
+          <NextLecturePrompt
+            countdown={countdown}
+            onNext={onNext}
+            hasNext={hasNext}
+          />
         )}
         <LectureActionFooter
           watchPercentage={watchPercentage}
           threshold={completionThreshold}
           isCompleted={completedRef.current || isCompleted}
           isGoogleDrive={true}
+          hasNext={hasNext}
           onCompleteNext={() => {
             void handlePlaybackEnded();
             onNext?.();
@@ -601,13 +608,18 @@ export function VideoPlayer({
         </div>
         <VideoProgressBar playing={isPlaying} progress={watchPercentage} />
         {countdown !== null && onNext && (
-          <NextLecturePrompt countdown={countdown} onNext={onNext} />
+          <NextLecturePrompt
+            countdown={countdown}
+            onNext={onNext}
+            hasNext={hasNext}
+          />
         )}
         <LectureActionFooter
           watchPercentage={watchPercentage}
           threshold={completionThreshold}
           isCompleted={completedRef.current || isCompleted}
           isGoogleDrive={false}
+          hasNext={hasNext}
           onCompleteNext={() => {
             void handlePlaybackEnded();
             onNext?.();
@@ -638,13 +650,18 @@ export function VideoPlayer({
       </div>
       <VideoProgressBar playing={isPlaying} progress={watchPercentage} />
       {countdown !== null && onNext && (
-        <NextLecturePrompt countdown={countdown} onNext={onNext} />
+        <NextLecturePrompt
+          countdown={countdown}
+          onNext={onNext}
+          hasNext={hasNext}
+        />
       )}
       <LectureActionFooter
         watchPercentage={watchPercentage}
         threshold={completionThreshold}
         isCompleted={completedRef.current || isCompleted}
         isGoogleDrive={false}
+        hasNext={hasNext}
         onCompleteNext={() => {
           void handlePlaybackEnded();
           onNext?.();
@@ -659,12 +676,14 @@ function LectureActionFooter({
   threshold,
   isCompleted,
   isGoogleDrive,
+  hasNext = true,
   onCompleteNext,
 }: {
   watchPercentage: number;
   threshold: number;
   isCompleted: boolean;
   isGoogleDrive: boolean;
+  hasNext?: boolean;
   onCompleteNext: () => void;
 }) {
   const eligible = isCompleted || watchPercentage >= threshold || isGoogleDrive;
@@ -688,9 +707,19 @@ function LectureActionFooter({
           onClick={onCompleteNext}
           className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-8 px-3.5 gap-1.5 cursor-pointer shadow-xs"
         >
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          <span>Proceed to Next</span>
-          <ChevronRight className="w-3.5 h-3.5" />
+          {hasNext ? (
+            <>
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Proceed to Next</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </>
+          ) : (
+            <>
+              <Award className="w-3.5 h-3.5" />
+              <span>Generate & View Certificate</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </>
+          )}
         </Button>
       )}
     </div>
@@ -700,9 +729,11 @@ function LectureActionFooter({
 function NextLecturePrompt({
   countdown,
   onNext,
+  hasNext = true,
 }: {
   countdown: number;
   onNext: () => void;
+  hasNext?: boolean;
 }) {
   const progress = Math.max(0, Math.min(100, (countdown / 3) * 100));
 
@@ -710,19 +741,21 @@ function NextLecturePrompt({
     <div className="space-y-2 rounded-lg border border-border-subtle bg-page-bg px-3 py-2.5">
       <div className="flex items-center justify-between gap-3">
         <span className="text-[11px] font-medium text-text-secondary">
-          Next in {countdown > 0 ? countdown : 1}
+          {hasNext
+            ? `Next lecture in ${countdown > 0 ? countdown : 1}s`
+            : `All completed! Generating certificate in ${countdown > 0 ? countdown : 1}s`}
         </span>
         <button
           type="button"
           onClick={onNext}
-          className="rounded-md bg-primary px-3 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-primary-dark"
+          className="rounded-md bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-700 cursor-pointer"
         >
-          Next
+          {hasNext ? "Next" : "View Certificate"}
         </button>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
         <div
-          className="h-full rounded-full bg-primary transition-[width] duration-1000 ease-linear"
+          className="h-full rounded-full bg-emerald-600 transition-[width] duration-1000 ease-linear"
           style={{ width: `${progress}%` }}
         />
       </div>
