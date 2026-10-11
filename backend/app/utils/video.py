@@ -19,19 +19,59 @@ def get_youtube_duration(video_id: str) -> Optional[float]:
                 "User-Agent": (
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/119.0.0.0 Safari/537.36"
+                    "Chrome/124.0.0.0 Safari/537.36"
                 ),
                 "Accept-Language": "en-US,en;q=0.9",
             },
         )
-        with urllib.request.urlopen(req, timeout=4) as resp:
-            content = resp.read(150000).decode("utf-8", "ignore")
-            m = re.search(r'"approxDurationMs"\s*:\s*"(\d+)"', content)
-            if m:
-                return round(float(m.group(1)) / 1000.0, 1)
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            content = resp.read(2000000).decode("utf-8", "ignore")
+            # 1. Primary lengthSeconds in player response
             m = re.search(r'"lengthSeconds"\s*:\s*"(\d+)"', content)
             if m:
                 return float(m.group(1))
+            # 2. approxDurationMs
+            m = re.search(r'"approxDurationMs"\s*:\s*"(\d+)"', content)
+            if m:
+                return round(float(m.group(1)) / 1000.0, 1)
+            # 3. ISO 8601 itemprop="duration" content="PT1H2M3S"
+            m_iso = re.search(r'itemprop="duration"\s+content="PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?"', content)
+            if m_iso:
+                h = int(m_iso.group(1) or 0)
+                m_val = int(m_iso.group(2) or 0)
+                s = int(m_iso.group(3) or 0)
+                return float(h * 3600 + m_val * 60 + s)
+    except Exception:
+        pass
+    return None
+
+
+def get_google_drive_duration(file_id: str) -> Optional[float]:
+    """Attempt to fetch video duration for a public Google Drive video file."""
+    if not file_id:
+        return None
+    try:
+        url = f"https://drive.google.com/file/d/{file_id}/view"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            content = resp.read(600000).decode("utf-8", "ignore")
+            for key in ["length_seconds", "durationMillis", "approxDurationMs", "duration"]:
+                m = re.search(rf'"{key}"\s*:\s*"?(\d+)"?', content)
+                if m:
+                    val = float(m.group(1))
+                    if key in ("durationMillis", "approxDurationMs") or val > 86400:
+                        return round(val / 1000.0, 1)
+                    return round(val, 1)
     except Exception:
         pass
     return None

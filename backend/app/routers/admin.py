@@ -43,7 +43,12 @@ from app.schemas.schemas import (
 )
 from app.services.auth_service import require_content_admin, hash_password
 from app.services.storage.local import storage_service
-from app.utils.video import detect_video_source, get_mp4_duration, get_youtube_duration
+from app.utils.video import (
+    detect_video_source,
+    get_mp4_duration,
+    get_youtube_duration,
+    get_google_drive_duration,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"], dependencies=[Depends(require_content_admin)])
 
@@ -293,6 +298,48 @@ async def delete_module(module_id: int, db: AsyncSession = Depends(get_db)):
 
 # ─── Lecture Management & Local Video Upload ─────────────────────────────────
 
+@router.get("/videos/detect-duration")
+async def detect_video_duration_endpoint(
+    url: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Detects video duration and source type for a given URL (YouTube, Google Drive, or local storage).
+    """
+    if not url or not url.strip():
+        raise HTTPException(status_code=400, detail="Video URL is required")
+
+    clean_url = url.strip()
+    source_type = "unknown"
+    video_id = None
+    duration = None
+
+    try:
+        source_type, video_id = detect_video_source(clean_url)
+    except Exception:
+        if clean_url.startswith("/uploads/") or "/uploads/" in clean_url:
+            source_type = "local"
+        else:
+            source_type = "direct"
+
+    if source_type == "youtube" and video_id:
+        duration = get_youtube_duration(video_id)
+    elif source_type == "google_drive" and video_id:
+        duration = get_google_drive_duration(video_id)
+    elif source_type == "local":
+        clean_path = clean_url.replace("/uploads/", "")
+        full_path = os.path.join(storage_service.base_dir, clean_path)
+        if os.path.exists(full_path):
+            duration = get_mp4_duration(full_path)
+
+    return {
+        "success": duration is not None and duration > 0,
+        "source_type": source_type,
+        "video_id": video_id,
+        "duration": round(duration, 1) if duration else None,
+    }
+
+
 @router.post("/modules/{module_id}/lectures")
 async def add_lecture(
     module_id: int,
@@ -322,8 +369,13 @@ async def add_lecture(
         if video_source_type == "youtube" and video_id:
             yt_dur = get_youtube_duration(video_id)
             if yt_dur and yt_dur > 0:
-                if duration is None or duration == 300.0 or duration <= 0:
+                if duration is None or duration <= 0:
                     duration = round(yt_dur, 1)
+        elif video_source_type == "google_drive" and video_id:
+            gd_dur = get_google_drive_duration(video_id)
+            if gd_dur and gd_dur > 0:
+                if duration is None or duration <= 0:
+                    duration = round(gd_dur, 1)
     if video_file and video_file.filename:
         # Validate format
         if not video_file.filename.lower().endswith(".mp4"):
@@ -397,8 +449,13 @@ async def update_lecture(
         if source_type == "youtube" and video_id:
             yt_dur = get_youtube_duration(video_id)
             if yt_dur and yt_dur > 0:
-                if data.duration is None or data.duration == 300.0 or data.duration <= 0:
+                if data.duration is None or data.duration <= 0:
                     lec.duration = round(yt_dur, 1)
+        elif source_type == "google_drive" and video_id:
+            gd_dur = get_google_drive_duration(video_id)
+            if gd_dur and gd_dur > 0:
+                if data.duration is None or data.duration <= 0:
+                    lec.duration = round(gd_dur, 1)
 
     await db.commit()
     await db.refresh(lec)

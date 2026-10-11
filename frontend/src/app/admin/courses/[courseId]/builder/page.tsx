@@ -26,6 +26,7 @@ import {
   CheckCircle2,
   Sparkles,
   ExternalLink,
+  Loader2,
 } from "lucide-react";
 import { formatDuration } from "@/lib/utils";
 
@@ -116,51 +117,92 @@ export default function CourseBuilderPage() {
   const [isFetchingDuration, setIsFetchingDuration] = useState(false);
   const [durationAutoDetected, setDurationAutoDetected] = useState(false);
 
-  // Directly extract duration from video File or URL
-  const extractVideoDuration = (
+  // Multi-tier video duration detection (YouTube, Drive, Local file/URL)
+  const extractVideoDuration = async (
     source: File | string,
     callback: (durationSec: number) => void,
   ) => {
     setIsFetchingDuration(true);
+
+    // 1. If File, use HTML5 video element (client-side, instant for local MP4 files)
+    if (typeof source !== "string") {
+      try {
+        const video = document.createElement("video");
+        video.preload = "metadata";
+        const blobUrl = URL.createObjectURL(source);
+        const cleanup = () => {
+          try {
+            URL.revokeObjectURL(blobUrl);
+          } catch {}
+          setIsFetchingDuration(false);
+        };
+        video.onloadedmetadata = () => {
+          const dur = Math.round(video.duration);
+          cleanup();
+          if (dur && !isNaN(dur) && dur > 0) {
+            callback(dur);
+          }
+        };
+        video.onerror = () => {
+          cleanup();
+        };
+        setTimeout(cleanup, 10000);
+        video.src = blobUrl;
+      } catch (err) {
+        console.error("Failed to read video duration from file:", err);
+        setIsFetchingDuration(false);
+      }
+      return;
+    }
+
+    const trimmedUrl = source.trim();
+    if (!trimmedUrl) {
+      setIsFetchingDuration(false);
+      return;
+    }
+
+    // 2. Query backend duration detection endpoint (/api/admin/videos/detect-duration)
+    try {
+      const res = await fetchApi<{
+        success: boolean;
+        duration?: number;
+        source_type?: string;
+        video_id?: string;
+      }>(`/api/admin/videos/detect-duration?url=${encodeURIComponent(trimmedUrl)}`);
+
+      if (res && res.success && res.duration && res.duration > 0) {
+        setIsFetchingDuration(false);
+        callback(Math.round(res.duration));
+        return;
+      }
+    } catch (err) {
+      console.warn("Backend video duration detection error:", err);
+    }
+
+    // 3. Fallback for direct MP4 URLs via HTML5 video element
     try {
       const video = document.createElement("video");
       video.preload = "metadata";
-
-      const url =
-        typeof source === "string" ? source : URL.createObjectURL(source);
-
+      const fullUrl = trimmedUrl.startsWith("http")
+        ? trimmedUrl
+        : `${API_BASE}${trimmedUrl}`;
       const cleanup = () => {
-        if (typeof source !== "string") {
-          try {
-            URL.revokeObjectURL(url);
-          } catch {
-            // ignore
-          }
-        }
-      };
-
-      video.onloadedmetadata = () => {
-        cleanup();
         setIsFetchingDuration(false);
+      };
+      video.onloadedmetadata = () => {
         const dur = Math.round(video.duration);
+        cleanup();
         if (dur && !isNaN(dur) && dur > 0) {
           callback(dur);
         }
       };
-
       video.onerror = () => {
         cleanup();
-        setIsFetchingDuration(false);
       };
-
-      setTimeout(() => {
-        cleanup();
-        setIsFetchingDuration(false);
-      }, 10000);
-
-      video.src = url;
+      setTimeout(cleanup, 8000);
+      video.src = fullUrl;
     } catch (err) {
-      console.error("Failed to read video duration:", err);
+      console.error("Fallback video duration error:", err);
       setIsFetchingDuration(false);
     }
   };
@@ -179,8 +221,9 @@ export default function CourseBuilderPage() {
 
   const handleLecUrlChange = (urlStr: string) => {
     setLecUrl(urlStr);
-    if (!lecFile && urlStr.trim().startsWith("http")) {
-      extractVideoDuration(urlStr.trim(), (seconds) => {
+    const trimmed = urlStr.trim();
+    if (!lecFile && trimmed.startsWith("http")) {
+      extractVideoDuration(trimmed, (seconds) => {
         setLecDuration(String(seconds));
         setDurationAutoDetected(true);
       });
@@ -296,6 +339,7 @@ export default function CourseBuilderPage() {
   const [editLecDuration, setEditLecDuration] = useState("300");
   const [editLecThreshold, setEditLecThreshold] = useState("90");
   const [editLecUrl, setEditLecUrl] = useState("");
+  const [editDurationAutoDetected, setEditDurationAutoDetected] = useState(false);
   const [savingEditLec, setSavingEditLec] = useState(false);
 
   const handleStartEditLecture = (lec: BuilderLecture) => {
@@ -303,6 +347,7 @@ export default function CourseBuilderPage() {
     setEditLecTitle(lec.title);
     setEditLecDesc(lec.description || "");
     setEditLecDuration(String(lec.duration || 300));
+    setEditDurationAutoDetected(false);
     setEditLecThreshold(String(lec.completion_threshold || 90));
     setEditLecUrl(
       lec.video_source_url ||
@@ -1302,17 +1347,17 @@ export default function CourseBuilderPage() {
                 </div>
               </div>
 
-              {/* Or Video URL Fallback */}
+              {/* Video URL Input */}
               <div className="space-y-1">
                 <label className="font-medium text-text-primary">
-                  Or Direct Video URL (Optional)
+                  YouTube, Google Drive, or Direct Video URL (Optional)
                 </label>
                 <Input
-                  placeholder="https://.../video.mp4"
+                  placeholder="https://www.youtube.com/watch?v=... or https://drive.google.com/file/d/... or .mp4"
                   value={lecUrl}
                   onChange={(e) => handleLecUrlChange(e.target.value)}
                   onBlur={() => {
-                    if (!lecFile && lecUrl.trim().startsWith("http")) {
+                    if (!lecFile && lecUrl.trim().startsWith("http") && !durationAutoDetected) {
                       extractVideoDuration(lecUrl.trim(), (sec) => {
                         setLecDuration(String(sec));
                         setDurationAutoDetected(true);
@@ -1329,11 +1374,28 @@ export default function CourseBuilderPage() {
                     <label className="font-medium text-text-primary">
                       Duration (Seconds)
                     </label>
-                    {durationAutoDetected && (
-                      <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        Auto-detected
-                      </span>
+                    {(lecFile || lecUrl.trim()) && (
+                      <button
+                        type="button"
+                        disabled={isFetchingDuration}
+                        onClick={() => {
+                          const target = lecFile || lecUrl.trim();
+                          if (!target) return;
+                          extractVideoDuration(target, (sec) => {
+                            setLecDuration(String(sec));
+                            setDurationAutoDetected(true);
+                          });
+                        }}
+                        className="text-[11px] text-primary hover:underline font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        title="Re-read duration from video file or link"
+                      >
+                        {isFetchingDuration ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3 h-3" />
+                        )}
+                        Re-fetch from video
+                      </button>
                     )}
                   </div>
                   <Input
@@ -1346,19 +1408,28 @@ export default function CourseBuilderPage() {
                     }}
                     className="text-sm font-semibold"
                   />
-                  <p className="text-[11px] text-slate-500">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
                     {lecDuration && parseInt(lecDuration, 10) > 0 ? (
-                      <>
+                      <span>
                         Equivalent:{" "}
-                        <span className="font-semibold text-slate-700">
+                        <strong className="font-semibold text-slate-800 font-mono">
                           {formatDuration(parseInt(lecDuration, 10))}
-                        </span>{" "}
-                        (mm:ss)
-                      </>
+                        </strong>
+                      </span>
+                    ) : isFetchingDuration ? (
+                      <span className="text-primary flex items-center gap-1">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Fetching video length...
+                      </span>
                     ) : (
-                      "Selecting a video will auto-fetch length"
+                      <span>Video will auto-detect length</span>
                     )}
-                  </p>
+                    {durationAutoDetected && (
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        Auto-detected
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-1">
@@ -1682,7 +1753,24 @@ export default function CourseBuilderPage() {
                 <Input
                   placeholder="https://www.youtube.com/watch?v=... or https://drive.google.com/file/d/.../view"
                   value={editLecUrl}
-                  onChange={(e) => setEditLecUrl(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEditLecUrl(val);
+                    if (val.trim().startsWith("http")) {
+                      extractVideoDuration(val.trim(), (dur) => {
+                        setEditLecDuration(String(dur));
+                        setEditDurationAutoDetected(true);
+                      });
+                    }
+                  }}
+                  onBlur={() => {
+                    if (editLecUrl.trim().startsWith("http") && !editDurationAutoDetected) {
+                      extractVideoDuration(editLecUrl.trim(), (dur) => {
+                        setEditLecDuration(String(dur));
+                        setEditDurationAutoDetected(true);
+                      });
+                    }
+                  }}
                   className="text-xs font-mono"
                 />
               </div>
@@ -1693,24 +1781,30 @@ export default function CourseBuilderPage() {
                     <label className="font-bold text-slate-700">
                       Duration (Seconds)
                     </label>
-                    {editingLecture?.video_path && (
+                    {(editLecUrl.trim() || editingLecture?.video_path) && (
                       <button
                         type="button"
+                        disabled={isFetchingDuration}
                         onClick={() => {
-                          const path = editingLecture.video_path;
-                          if (!path) return;
+                          const target =
+                            editLecUrl.trim() ||
+                            editingLecture?.video_path ||
+                            editingLecture?.video_source_url;
+                          if (!target) return;
 
-                          const url = path.startsWith("http")
-                            ? path
-                            : `${API_BASE}${path}`;
-                          extractVideoDuration(url, (dur) =>
-                            setEditLecDuration(String(dur)),
-                          );
+                          extractVideoDuration(target, (dur) => {
+                            setEditLecDuration(String(dur));
+                            setEditDurationAutoDetected(true);
+                          });
                         }}
-                        className="text-[11px] text-primary hover:underline font-semibold flex items-center gap-1 cursor-pointer"
-                        title="Re-read duration from video file"
+                        className="text-[11px] text-primary hover:underline font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        title="Re-read duration from video URL or file"
                       >
-                        <Sparkles className="w-3 h-3" />
+                        {isFetchingDuration ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3 h-3" />
+                        )}
                         Re-fetch from video
                       </button>
                     )}
@@ -1718,13 +1812,34 @@ export default function CourseBuilderPage() {
                   <Input
                     type="number"
                     value={editLecDuration}
-                    onChange={(e) => setEditLecDuration(e.target.value)}
+                    onChange={(e) => {
+                      setEditLecDuration(e.target.value);
+                      setEditDurationAutoDetected(false);
+                    }}
                     className="text-sm font-semibold"
                   />
-                  <p className="text-[11px] text-slate-500">
-                    Equivalent:{" "}
-                    {formatDuration(parseInt(editLecDuration, 10) || 0)} (mm:ss)
-                  </p>
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                    {editLecDuration && parseInt(editLecDuration, 10) > 0 ? (
+                      <span>
+                        Equivalent:{" "}
+                        <strong className="font-semibold text-slate-800 font-mono">
+                          {formatDuration(parseInt(editLecDuration, 10))}
+                        </strong>
+                      </span>
+                    ) : isFetchingDuration ? (
+                      <span className="text-primary flex items-center gap-1">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Fetching video length...
+                      </span>
+                    ) : (
+                      <span>Enter video length in seconds</span>
+                    )}
+                    {editDurationAutoDetected && (
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        Auto-detected
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-1">

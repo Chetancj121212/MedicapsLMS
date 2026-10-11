@@ -6,9 +6,14 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatDuration(seconds?: number): string {
-  if (!seconds) return "0:00";
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
+  if (!seconds || isNaN(seconds) || seconds <= 0) return "0:00";
+  const secInt = Math.round(seconds);
+  const hrs = Math.floor(secInt / 3600);
+  const mins = Math.floor((secInt % 3600) / 60);
+  const secs = secInt % 60;
+  if (hrs > 0) {
+    return `${hrs}h ${mins < 10 ? "0" : ""}${mins}m ${secs < 10 ? "0" : ""}${secs}s`;
+  }
   return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
 }
 
