@@ -146,8 +146,57 @@ export default function CourseLearningPage() {
   }, [user, authLoading, courseId, loadStatus, router]);
 
   const handleLectureCompleted = useCallback(async () => {
+    // 1. Optimistically unlock next item in local curriculum state immediately
+    setCurriculum((prevCurriculum) => {
+      if (!prevCurriculum || !selectedItem) return prevCurriculum;
+      const allItems = [
+        ...prevCurriculum.modules.flatMap((m) => m.items),
+        ...(prevCurriculum.final_quizzes || []),
+      ];
+      const curIdx = allItems.findIndex(
+        (it) => it.id === selectedItem.id && it.type === selectedItem.type,
+      );
+      const nextId =
+        curIdx >= 0 && curIdx < allItems.length - 1 ? allItems[curIdx + 1].id : null;
+
+      const updatedModules = prevCurriculum.modules.map((mod) => ({
+        ...mod,
+        items: mod.items.map((it) => {
+          if (it.id === selectedItem.id && it.type === selectedItem.type) {
+            return {
+              ...it,
+              is_completed: true,
+              is_locked: false,
+              progress: {
+                watched_seconds: it.progress?.watched_seconds || 0,
+                last_position_seconds: it.progress?.last_position_seconds || 0,
+                completion_percentage: 100,
+              },
+            };
+          }
+          if (it.id === nextId) {
+            return { ...it, is_locked: false };
+          }
+          return it;
+        }),
+      }));
+
+      const updatedFinalQuizzes = (prevCurriculum.final_quizzes || []).map((fq) => {
+        if (fq.id === nextId) {
+          return { ...fq, is_locked: false };
+        }
+        return fq;
+      });
+
+      return {
+        ...prevCurriculum,
+        modules: updatedModules,
+        final_quizzes: updatedFinalQuizzes,
+      };
+    });
+
     await loadStatus();
-  }, [loadStatus]);
+  }, [loadStatus, selectedItem]);
 
   // Realtime progress updater from VideoPlayer
   const handleProgressUpdate = useCallback(
@@ -257,7 +306,7 @@ export default function CourseLearningPage() {
 
   const selectContentItem = useCallback(
     (item: CurriculumItemStatus) => {
-      if (item.is_locked) return;
+      if (item.is_locked && !selectedItem?.is_completed) return;
       if (item.type === "quiz") {
         router.push(`/student/courses/${courseId}/quiz/${item.id}`);
       } else {
@@ -265,7 +314,7 @@ export default function CourseLearningPage() {
         setPlaybackVersion((version) => version + 1);
       }
     },
-    [courseId, router],
+    [courseId, router, selectedItem?.is_completed],
   );
 
   const handleNextItem = useCallback(() => {
@@ -278,11 +327,10 @@ export default function CourseLearningPage() {
     const currentIndex = items.findIndex(
       (item) => item.id === selectedItem.id && item.type === selectedItem.type,
     );
-    const nextItem = items
-      .slice(currentIndex + 1)
-      .find((item) => !item.is_locked);
-
-    if (nextItem) selectContentItem(nextItem);
+    if (currentIndex >= 0 && currentIndex < items.length - 1) {
+      const nextItem = items[currentIndex + 1];
+      selectContentItem({ ...nextItem, is_locked: false });
+    }
   }, [curriculum, selectContentItem, selectedItem]);
 
   if (authLoading || loading) {
@@ -530,11 +578,19 @@ export default function CourseLearningPage() {
 
                   <div className="relative space-y-1 pl-5">
                     <div className="absolute bottom-2 left-1 top-2 w-0.5 bg-slate-200" />
-                    {mod.items.map((it) => {
+                    {mod.items.map((it, itemIdx) => {
                       const isSelected =
                         selectedItem?.id === it.id &&
                         selectedItem?.type === it.type;
-                      const isLocked = it.is_locked;
+
+                      const isNextPlayable =
+                        Boolean(selectedItem?.is_completed) &&
+                        (mod.items[itemIdx - 1]?.id === selectedItem?.id ||
+                          (itemIdx === 0 &&
+                            modIdx > 0 &&
+                            curriculum.modules[modIdx - 1]?.items.slice(-1)[0]?.id === selectedItem?.id));
+
+                      const isLocked = it.is_locked && !isNextPlayable;
 
                       return (
                         <div key={`${it.type}-${it.id}`} className="relative">
@@ -546,7 +602,7 @@ export default function CourseLearningPage() {
                             }`}
                           />
                           <button
-                            onClick={() => selectContentItem(it)}
+                            onClick={() => selectContentItem({ ...it, is_locked: isLocked })}
                             disabled={isLocked}
                             className={`w-full rounded-lg px-2.5 py-1.5 text-left text-xs transition-all ${
                               isSelected

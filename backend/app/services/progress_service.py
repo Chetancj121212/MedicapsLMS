@@ -146,19 +146,23 @@ class ProgressService:
             watch_pct = min(100.0, round(watch_ratio * 100.0, 1))
             effective_watch_pct = max(watch_pct, client_reported_pct)
 
-            # Active screen time requirement is at least 60% of lecture duration
-            meets_active_threshold = current_active_time >= (eff_duration * 0.6)
-
-            # Video watch percentage must be >= admin-configured threshold
+            # Completion triggers:
+            # 1. Already done
+            # 2. Watch percentage reached admin threshold
+            # 3. Last playback position reached >= 85% or within 5s of end
+            # 4. Client reported percentage reached threshold
             meets_watch_threshold = effective_watch_pct >= threshold_pct
+            reached_end = (
+                (last_position_seconds or 0.0) >= (eff_duration * 0.85)
+                or ((last_position_seconds or 0.0) >= eff_duration - 5.0 and (last_position_seconds or 0.0) > 0)
+            )
+            client_completed = client_reported_pct >= threshold_pct or client_reported_pct >= 100.0
 
-            # Both conditions satisfied OR client reached 100% completion
-            is_now_completed = is_already_done or (meets_watch_threshold and meets_active_threshold) or (client_reported_pct >= 100.0)
+            is_now_completed = is_already_done or meets_watch_threshold or reached_end or client_completed
             final_pct = 100.0 if is_now_completed else effective_watch_pct
         else:
-            is_now_completed = is_already_done or (client_reported_pct >= 100.0)
+            is_now_completed = is_already_done or (client_reported_pct >= threshold_pct) or (client_reported_pct >= 100.0)
             final_pct = 100.0 if is_now_completed else client_reported_pct
-
 
         if not progress:
             progress = LectureProgress(
@@ -188,9 +192,11 @@ class ProgressService:
             if last_activity_at:
                 progress.last_activity_at = last_activity_at
             progress.last_watched_at = datetime.utcnow()
-            if is_now_completed and not progress.completed:
+            if is_now_completed:
                 progress.completed = True
-                progress.completed_at = datetime.utcnow()
+                if not progress.completed_at:
+                    progress.completed_at = datetime.utcnow()
+                progress.completion_percentage = 100.0
 
         await db.commit()
         await db.refresh(progress)
@@ -304,6 +310,7 @@ class ProgressService:
         completed_lectures = 0
         current_module_title = None
         current_item_title = None
+        needs_db_commit = False
 
         for m_idx, mod in enumerate(sorted_modules):
             mod_locked = not previous_module_completed
@@ -331,6 +338,7 @@ class ProgressService:
                     lp.completed_at = lp.completed_at or datetime.utcnow()
                     lp.completion_percentage = 100.0
                     db.add(lp)
+                    needs_db_commit = True
 
                 if is_completed:
                     completed_lectures += 1
@@ -448,6 +456,9 @@ class ProgressService:
                 "is_final": True,
                 "order_index": fq.order_index,
             })
+
+        if needs_db_commit:
+            await db.commit()
 
         enrollment = await ProgressService.get_or_create_enrollment(db, student_id, course_id)
 

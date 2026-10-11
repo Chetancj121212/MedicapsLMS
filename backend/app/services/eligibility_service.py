@@ -101,33 +101,44 @@ class EligibilityService:
         if not progress:
             return False
 
-        # If already marked completed by the tracking system, trust it
-        if progress.completed or (progress.completion_percentage and progress.completion_percentage >= 100.0):
+        # 1. If already marked completed by tracking, trust it
+        if progress.completed:
+            return True
+
+        threshold_pct = float(lecture.completion_threshold or 90.0)
+
+        # 2. Recorded completion percentage satisfies threshold
+        if progress.completion_percentage is not None and progress.completion_percentage >= threshold_pct:
             return True
 
         eff_duration = lecture.duration or 0.0
         if eff_duration <= 0:
-            # No valid duration — cannot verify by percentage
-            return False
+            return bool(progress.completion_percentage and progress.completion_percentage > 0)
 
-        threshold_pct = float(lecture.completion_threshold or 90.0)
-
-        # Calculate watch percentage from accumulated play time
+        # 3. Calculate watch percentage from accumulated play time
         play_time = max(
             progress.video_play_time_seconds or 0.0,
             progress.watched_seconds or 0.0,
         )
         watch_pct = min(100.0, round((play_time / eff_duration) * 100.0, 1))
+        if watch_pct >= threshold_pct:
+            return True
 
-        # Active screen time must be >= 60% of lecture duration (with play_time fallback for iframe focus)
+        # 4. Check if student reached near the end of the video
+        last_pos = progress.last_position_seconds or 0.0
+        if last_pos >= (eff_duration * 0.85) or (last_pos >= eff_duration - 5.0 and last_pos > 0):
+            return True
+
+        # 5. Active screen time verification
         active_time = max(
             progress.active_screen_time_seconds or 0.0,
             play_time * 0.75 if play_time > 0 else 0.0,
         )
-        meets_watch = watch_pct >= threshold_pct or (progress.completion_percentage and progress.completion_percentage >= 100.0)
-        meets_active = active_time >= (eff_duration * 0.6)
+        meets_active = active_time >= (eff_duration * 0.5)
+        if watch_pct >= (threshold_pct * 0.8) and meets_active:
+            return True
 
-        return meets_watch and meets_active
+        return False
 
     @staticmethod
     async def check_eligibility(

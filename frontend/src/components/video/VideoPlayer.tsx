@@ -2,7 +2,8 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { fetchApi } from "@/lib/api";
-import { Pause, Play } from "lucide-react";
+import { Pause, Play, CheckCircle2, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 
 interface YouTubePlayer {
   getCurrentTime?: () => number;
@@ -104,6 +105,7 @@ export function VideoPlayer({
   videoUrl,
   videoSourceType,
   videoId,
+  completionThreshold = 90,
   duration: initialDuration,
   initialPosition = 0,
   initialPercentage = 0,
@@ -161,15 +163,18 @@ export function VideoPlayer({
     if (isCompleted) lastPositionRef.current = 0;
   }, [initialPosition, isCompleted]);
 
-  const handlePlaybackEnded = useCallback(() => {
+  const handlePlaybackEnded = useCallback(async () => {
     if (endHandledRef.current) return;
     endHandledRef.current = true;
     setWatchPercentage(100);
     completedRef.current = true;
-    void syncRef.current(true);
+    onProgressUpdate?.(100, true);
+    try {
+      await syncRef.current(true);
+    } catch {}
     onCompleted?.();
     if (onNextRef.current) setCountdown(3);
-  }, [onCompleted]);
+  }, [onCompleted, onProgressUpdate]);
 
   useEffect(() => {
     if (countdown === null) return;
@@ -255,11 +260,13 @@ export function VideoPlayer({
       const current =
         Number(getPlayerCurrentTime(player) ?? lastPositionRef.current) || 0;
       const playerDuration = Number(getPlayerDuration(player) ?? duration ?? 0);
+      const posPct = playerDuration > 0 ? (current / playerDuration) * 100 : 0;
+      const timePct = playerDuration > 0 ? (playTimeRef.current / playerDuration) * 100 : 0;
       const effectivePct =
         finalize || completedRef.current
           ? 100
           : playerDuration
-            ? Math.min(100, (playTimeRef.current / playerDuration) * 100)
+            ? Math.min(100, Math.max(posPct, timePct))
             : 0;
 
       inFlightRef.current = true;
@@ -292,7 +299,7 @@ export function VideoPlayer({
 
         const effectiveWatchPct = response.completed
           ? 100
-          : response.completion_percentage || 0;
+          : Math.max(response.completion_percentage || 0, effectivePct);
 
         setWatchPercentage(effectiveWatchPct);
         onProgressUpdate?.(effectiveWatchPct, response.completed, activePct);
@@ -368,7 +375,7 @@ export function VideoPlayer({
             if (event.data === window.YT?.PlayerState.ENDED) {
               handlePlaybackEnded();
             } else if (event.data === window.YT?.PlayerState.PAUSED) {
-              void syncRef.current(true);
+              void syncRef.current(false);
             }
           },
         },
@@ -410,7 +417,7 @@ export function VideoPlayer({
       setIsPlaying(isPlay);
       if (!isPlay) {
         if (value.includes("end")) handlePlaybackEnded();
-        else void syncRef.current(true);
+        else void syncRef.current(false);
       }
     };
     window.addEventListener("message", handleMessage);
@@ -446,9 +453,19 @@ export function VideoPlayer({
 
       const length = Number(getPlayerDuration(player) ?? duration ?? 0);
       if (length > 0) {
-        // Calculate video watch percentage using total accumulated playback time / lecture duration
-        const watchPct = Math.min(100, (playTimeRef.current / length) * 100);
+        const posPct = (current / length) * 100;
+        const timePct = (playTimeRef.current / length) * 100;
+        const watchPct = Math.min(100, Math.max(posPct, timePct));
         setWatchPercentage(watchPct);
+
+        const thresh = completionThreshold || 90;
+        if (
+          (watchPct >= thresh || current >= length - 2) &&
+          !completedRef.current &&
+          !endHandledRef.current
+        ) {
+          void handlePlaybackEnded();
+        }
       }
 
       // Sync periodically every 3 seconds while playing
@@ -458,7 +475,7 @@ export function VideoPlayer({
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [duration]);
+  }, [completionThreshold, duration, handlePlaybackEnded]);
 
   // Persist on visibility change, blur, and page exit
   useEffect(() => {
@@ -504,6 +521,16 @@ export function VideoPlayer({
         {countdown !== null && onNext && (
           <NextLecturePrompt countdown={countdown} onNext={onNext} />
         )}
+        <LectureActionFooter
+          watchPercentage={watchPercentage}
+          threshold={completionThreshold}
+          isCompleted={completedRef.current || isCompleted}
+          isGoogleDrive={true}
+          onCompleteNext={() => {
+            void handlePlaybackEnded();
+            onNext?.();
+          }}
+        />
       </div>
     );
 
@@ -565,7 +592,7 @@ export function VideoPlayer({
               playingRef.current = false;
               setIsPlaying(false);
               lastPositionRef.current = event.currentTarget.currentTime;
-              handlePlaybackEnded();
+              void handlePlaybackEnded();
             }}
             onTimeUpdate={(event) => {
               lastPositionRef.current = event.currentTarget.currentTime;
@@ -576,6 +603,16 @@ export function VideoPlayer({
         {countdown !== null && onNext && (
           <NextLecturePrompt countdown={countdown} onNext={onNext} />
         )}
+        <LectureActionFooter
+          watchPercentage={watchPercentage}
+          threshold={completionThreshold}
+          isCompleted={completedRef.current || isCompleted}
+          isGoogleDrive={false}
+          onCompleteNext={() => {
+            void handlePlaybackEnded();
+            onNext?.();
+          }}
+        />
       </div>
     );
 
@@ -602,6 +639,59 @@ export function VideoPlayer({
       <VideoProgressBar playing={isPlaying} progress={watchPercentage} />
       {countdown !== null && onNext && (
         <NextLecturePrompt countdown={countdown} onNext={onNext} />
+      )}
+      <LectureActionFooter
+        watchPercentage={watchPercentage}
+        threshold={completionThreshold}
+        isCompleted={completedRef.current || isCompleted}
+        isGoogleDrive={false}
+        onCompleteNext={() => {
+          void handlePlaybackEnded();
+          onNext?.();
+        }}
+      />
+    </div>
+  );
+}
+
+function LectureActionFooter({
+  watchPercentage,
+  threshold,
+  isCompleted,
+  isGoogleDrive,
+  onCompleteNext,
+}: {
+  watchPercentage: number;
+  threshold: number;
+  isCompleted: boolean;
+  isGoogleDrive: boolean;
+  onCompleteNext: () => void;
+}) {
+  const eligible = isCompleted || watchPercentage >= threshold || isGoogleDrive;
+
+  return (
+    <div className="flex items-center justify-between pt-2 gap-3 flex-wrap border-t border-border-subtle/80 mt-1">
+      <div className="flex items-center gap-1.5 text-xs text-text-secondary">
+        {isCompleted || watchPercentage >= 100 ? (
+          <span className="text-emerald-700 font-semibold flex items-center gap-1">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            Lecture Completed (100%)
+          </span>
+        ) : (
+          <span>Requirement: {threshold}% watched to unlock next</span>
+        )}
+      </div>
+
+      {eligible && (
+        <Button
+          size="sm"
+          onClick={onCompleteNext}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-8 px-3.5 gap-1.5 cursor-pointer shadow-xs"
+        >
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          <span>Proceed to Next</span>
+          <ChevronRight className="w-3.5 h-3.5" />
+        </Button>
       )}
     </div>
   );
