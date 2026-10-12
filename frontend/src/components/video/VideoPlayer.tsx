@@ -154,6 +154,7 @@ export function VideoPlayer({
   );
   const [isPlaying, setIsPlaying] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [completedState, setCompletedState] = useState(isCompleted);
 
   useEffect(() => {
     onNextRef.current = onNext;
@@ -170,6 +171,7 @@ export function VideoPlayer({
     endHandledRef.current = true;
     setWatchPercentage(100);
     completedRef.current = true;
+    setCompletedState(true);
     onProgressUpdate?.(100, true);
     try {
       await syncRef.current(true);
@@ -233,6 +235,7 @@ export function VideoPlayer({
         }
         if (data.completed && !completedRef.current) {
           completedRef.current = true;
+          setCompletedState(true);
           setWatchPercentage(100);
           onCompleted?.();
         } else if (typeof data.completion_percentage === "number") {
@@ -308,6 +311,7 @@ export function VideoPlayer({
 
         if (response.completed && !completedRef.current) {
           completedRef.current = true;
+          setCompletedState(true);
           onCompleted?.();
         }
       } catch (error) {
@@ -530,7 +534,7 @@ export function VideoPlayer({
         <LectureActionFooter
           watchPercentage={watchPercentage}
           threshold={completionThreshold}
-          isCompleted={completedRef.current || isCompleted}
+          isCompleted={completedState || isCompleted}
           isGoogleDrive={true}
           hasNext={hasNext}
           onCompleteNext={async () => {
@@ -617,7 +621,7 @@ export function VideoPlayer({
         <LectureActionFooter
           watchPercentage={watchPercentage}
           threshold={completionThreshold}
-          isCompleted={completedRef.current || isCompleted}
+          isCompleted={completedState || isCompleted}
           isGoogleDrive={false}
           hasNext={hasNext}
           onCompleteNext={async () => {
@@ -659,7 +663,7 @@ export function VideoPlayer({
       <LectureActionFooter
         watchPercentage={watchPercentage}
         threshold={completionThreshold}
-        isCompleted={completedRef.current || isCompleted}
+        isCompleted={completedState || isCompleted}
         isGoogleDrive={false}
         hasNext={hasNext}
         onCompleteNext={async () => {
