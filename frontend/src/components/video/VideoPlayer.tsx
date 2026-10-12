@@ -188,9 +188,6 @@ export function VideoPlayer({
   const handlePlaybackEndedRef = useRef<() => Promise<void>>(async () => undefined);
 
   // Rendering state
-  const [duration, setDuration] = useState<number | null>(
-    initialDuration && initialDuration > 0 ? initialDuration : null,
-  );
   const [watchPercentage, setWatchPercentage] = useState<number>(
     isCompleted
       ? 100
@@ -203,6 +200,9 @@ export function VideoPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [completedState, setCompletedState] = useState(isCompleted);
+
+  const isEffectivelyCompleted = completedState || isCompleted;
+  const displayPercentage = isEffectivelyCompleted ? 100 : watchPercentage;
 
   useEffect(() => {
     onCompletedRef.current = onCompleted;
@@ -224,8 +224,6 @@ export function VideoPlayer({
     isCompletedRef.current = isCompleted;
     if (isCompleted) {
       completedRef.current = true;
-      setCompletedState(true);
-      setWatchPercentage(100);
       lastPositionRef.current = 0;
     }
   }, [isCompleted]);
@@ -432,7 +430,6 @@ export function VideoPlayer({
             console.log(`[VIDEO_READY] duration=${length}`);
             if (length > 0) {
               durationRef.current = length;
-              setDuration(length);
             }
 
             // Only seek to resume position ONCE, and NEVER seek to the end!
@@ -673,7 +670,7 @@ export function VideoPlayer({
             allow="autoplay"
           />
         </div>
-        <VideoProgressBar playing={isPlaying} progress={watchPercentage} />
+        <VideoProgressBar playing={isPlaying} progress={displayPercentage} />
         {countdown !== null && onNext && (
           <NextLecturePrompt
             countdown={countdown}
@@ -682,9 +679,9 @@ export function VideoPlayer({
           />
         )}
         <LectureActionFooter
-          watchPercentage={watchPercentage}
+          watchPercentage={displayPercentage}
           threshold={completionThreshold}
-          isCompleted={completedState || isCompleted}
+          isCompleted={isEffectivelyCompleted}
           isGoogleDrive={true}
           hasNext={hasNext}
           onCompleteNext={async () => {
@@ -710,7 +707,6 @@ export function VideoPlayer({
               console.log(`[VIDEO_READY] duration=${length}`);
               if (length > 0) {
                 durationRef.current = length;
-                setDuration(length);
               }
               if (!hasResumedRef.current) {
                 hasResumedRef.current = true;
@@ -775,7 +771,7 @@ export function VideoPlayer({
             }}
           />
         </div>
-        <VideoProgressBar playing={isPlaying} progress={watchPercentage} />
+        <VideoProgressBar playing={isPlaying} progress={displayPercentage} />
         {countdown !== null && onNext && (
           <NextLecturePrompt
             countdown={countdown}
@@ -784,9 +780,9 @@ export function VideoPlayer({
           />
         )}
         <LectureActionFooter
-          watchPercentage={watchPercentage}
+          watchPercentage={displayPercentage}
           threshold={completionThreshold}
-          isCompleted={completedState || isCompleted}
+          isCompleted={isEffectivelyCompleted}
           isGoogleDrive={false}
           hasNext={hasNext}
           onCompleteNext={async () => {
@@ -817,7 +813,7 @@ export function VideoPlayer({
       <div className="relative bg-black rounded-xl overflow-hidden aspect-video border border-border-subtle">
         <div ref={containerRef} className="absolute inset-0 w-full h-full" />
       </div>
-      <VideoProgressBar playing={isPlaying} progress={watchPercentage} />
+      <VideoProgressBar playing={isPlaying} progress={displayPercentage} />
       {countdown !== null && onNext && (
         <NextLecturePrompt
           countdown={countdown}
@@ -826,9 +822,9 @@ export function VideoPlayer({
         />
       )}
       <LectureActionFooter
-        watchPercentage={watchPercentage}
+        watchPercentage={displayPercentage}
         threshold={completionThreshold}
-        isCompleted={completedState || isCompleted}
+        isCompleted={isEffectivelyCompleted}
         isGoogleDrive={false}
         hasNext={hasNext}
         onCompleteNext={async () => {

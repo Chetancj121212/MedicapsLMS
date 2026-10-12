@@ -143,7 +143,15 @@ export default function CourseLearningPage() {
       return;
     }
     if (user && courseId) {
-      loadStatus();
+      let isSubscribed = true;
+      void Promise.resolve().then(() => {
+        if (isSubscribed) {
+          void loadStatus();
+        }
+      });
+      return () => {
+        isSubscribed = false;
+      };
     }
   }, [user, authLoading, courseId, loadStatus, router]);
 

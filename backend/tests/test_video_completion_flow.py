@@ -1,5 +1,4 @@
 import pytest
-import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.pool import StaticPool
@@ -48,16 +47,23 @@ async def override_get_db():
 app.dependency_overrides[get_db] = override_get_db
 
 
-@pytest_asyncio.fixture(autouse=True)
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.fixture(autouse=True)
 async def setup_db():
+    app.dependency_overrides[get_db] = override_get_db
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+    app.dependency_overrides.pop(get_db, None)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_seeking_does_not_mark_lecture_completed():
     """Seeking near the end with little watched time must NOT mark lecture completed."""
     async with TestingSessionLocal() as db:
@@ -123,7 +129,7 @@ async def test_seeking_does_not_mark_lecture_completed():
         assert is_done is False
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_genuine_watch_marks_lecture_completed():
     """Watching >= 90% with sufficient active screen time marks lecture completed."""
     async with TestingSessionLocal() as db:
@@ -185,7 +191,7 @@ async def test_genuine_watch_marks_lecture_completed():
         assert progress.completion_percentage == 100.0
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_certificates_api_and_idempotent_creation():
     """Completing course issues exactly 1 certificate and appears in /api/certificates/my."""
     async with TestingSessionLocal() as db:
