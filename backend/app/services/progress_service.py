@@ -129,8 +129,26 @@ class ProgressService:
         
         is_already_done = bool(progress and progress.completed)
 
-        # Video Watch Progress: count total accumulated playback time
+        # Parse and merge watched segments
+        existing_segments = []
+        if progress and progress.watched_segments:
+            try:
+                parsed = json.loads(progress.watched_segments)
+                if isinstance(parsed, list):
+                    existing_segments = parsed
+            except Exception:
+                existing_segments = []
+
+        all_segments = list(existing_segments)
+        if segments:
+            all_segments.extend(segments)
+
+        merged_segments = merge_segments(all_segments, max_duration=eff_duration if eff_duration > 0 else None)
+        unique_from_segments = calculate_unique_watched(merged_segments)
+
+        # Unique watched playback seconds
         current_play_time = max(
+            unique_from_segments,
             progress.video_play_time_seconds if progress else 0.0,
             progress.watched_seconds if progress else 0.0,
             float(video_play_time_seconds or 0.0),
@@ -138,47 +156,37 @@ class ProgressService:
         )
 
         # Active Screen Time: only when video is in PLAYING state and tab is focused/visible
-        # Fallback to 75% of play time if browser iframe focus caused focus loss on the parent tab
         raw_active_time = max(
             progress.active_screen_time_seconds if progress else 0.0,
             float(active_screen_time_seconds or 0.0),
         )
         current_active_time = max(raw_active_time, current_play_time * 0.75) if current_play_time > 0 else raw_active_time
 
-        client_reported_pct = float(completion_percentage or 0.0)
-
         if eff_duration > 0:
-            # Video watch percentage = total accumulated playback time / lecture duration
-            watch_ratio = current_play_time / eff_duration
-            watch_pct = min(100.0, round(watch_ratio * 100.0, 1))
-            effective_watch_pct = max(watch_pct, client_reported_pct)
+            watch_pct = min(100.0, round((current_play_time / eff_duration) * 100.0, 1))
+            meets_watch_threshold = watch_pct >= threshold_pct
+            meets_active_threshold = current_active_time >= (eff_duration * 0.5) or current_active_time >= (current_play_time * 0.7)
 
-            # Completion triggers:
-            # 1. Already done
-            # 2. Watch percentage reached admin threshold
-            # 3. Last playback position reached >= 85% or within 5s of end
-            # 4. Client reported percentage reached threshold
-            meets_watch_threshold = effective_watch_pct >= threshold_pct
-            reached_end = (
-                (last_position_seconds or 0.0) >= (eff_duration * 0.85)
-                or ((last_position_seconds or 0.0) >= eff_duration - 5.0 and (last_position_seconds or 0.0) > 0)
-            )
-            client_completed = client_reported_pct >= threshold_pct or client_reported_pct >= 100.0
-
-            is_now_completed = is_already_done or meets_watch_threshold or reached_end or client_completed
-            final_pct = 100.0 if is_now_completed else effective_watch_pct
+            # Completion can ONLY happen when watch requirement AND active screen requirement are satisfied, or already completed
+            is_now_completed = is_already_done or (meets_watch_threshold and meets_active_threshold)
+            final_pct = 100.0 if is_now_completed else watch_pct
         else:
-            is_now_completed = is_already_done or (client_reported_pct >= threshold_pct) or (client_reported_pct >= 100.0)
-            final_pct = 100.0 if is_now_completed else client_reported_pct
+            is_now_completed = is_already_done or (current_play_time >= 30.0)
+            final_pct = 100.0 if is_now_completed else 0.0
+
+        print(f"[VIDEO_PROGRESS] lectureId={lecture_id} studentId={student_id} watchedSeconds={current_play_time:.1f} watchedPercentage={final_pct:.1f}%")
+        print(f"[LECTURE_COMPLETION] eligible={is_now_completed} (alreadyDone={is_already_done}, meetsWatch={meets_watch_threshold if eff_duration > 0 else True})")
+
+        clamped_position = max(0.0, min(float(last_position_seconds or 0.0), eff_duration if eff_duration > 0 else float(last_position_seconds or 0.0)))
 
         if not progress:
             progress = LectureProgress(
                 student_id=student_id,
                 lecture_id=lecture_id,
                 watched_seconds=current_play_time,
-                watched_segments="[]",
+                watched_segments=json.dumps(merged_segments),
                 completion_percentage=final_pct,
-                last_position_seconds=last_position_seconds,
+                last_position_seconds=clamped_position,
                 youtube_play_time_seconds=current_play_time if lecture.video_source_type == "youtube" else 0.0,
                 video_play_time_seconds=current_play_time,
                 active_screen_time_seconds=current_active_time,
@@ -191,11 +199,12 @@ class ProgressService:
         else:
             progress.watched_seconds = current_play_time
             progress.video_play_time_seconds = current_play_time
+            progress.watched_segments = json.dumps(merged_segments)
             if lecture.video_source_type == "youtube":
                 progress.youtube_play_time_seconds = current_play_time
             progress.active_screen_time_seconds = current_active_time
             progress.completion_percentage = final_pct
-            progress.last_position_seconds = last_position_seconds
+            progress.last_position_seconds = clamped_position
             progress.last_activity_at = last_activity_at
             progress.last_watched_at = datetime.utcnow()
             if is_now_completed:

@@ -25,7 +25,9 @@ async def verify_certificate(certificate_number: str, db: AsyncSession = Depends
     return result
 
 
+@router.get("/my")
 @router.get("/my-certificates")
+@router.get("/student/my-certificates")
 async def get_my_certificates(
     current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
@@ -37,6 +39,21 @@ async def get_my_certificates(
     if not student:
         raise HTTPException(status_code=403, detail="Student profile not found")
 
+    # If course completion is already true but certificate does not exist in DB, reconcile it
+    from app.models.enrollment import Enrollment, EnrollmentStatus
+    from app.services.certificate_service import CertificateService
+    enr_stmt = select(Enrollment).where(
+        Enrollment.student_id == student.id,
+    )
+    enr_res = await db.execute(enr_stmt)
+    enrollments = enr_res.scalars().all()
+    for enr in enrollments:
+        if enr.status == EnrollmentStatus.COMPLETED or (enr.progress_percentage and enr.progress_percentage >= 100.0):
+            try:
+                await CertificateService.issue_certificate_if_eligible(db, student.id, enr.course_id)
+            except Exception as e:
+                print(f"[CERTIFICATE_ERROR] Reconciliation error for course {enr.course_id}: {e}")
+
     stmt = (
         select(Certificate)
         .where(Certificate.student_id == student.id)
@@ -45,6 +62,8 @@ async def get_my_certificates(
     )
     res = await db.execute(stmt)
     certs = res.scalars().all()
+
+    print(f"[CERTIFICATES_FETCH] count={len(certs)}")
 
     return [
         {

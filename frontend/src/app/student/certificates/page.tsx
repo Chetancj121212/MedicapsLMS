@@ -33,12 +33,13 @@ export default function StudentCertificatesPage() {
 
     async function loadCertificates() {
       try {
-        const data = await fetchApi<CertificateItem[]>(
-          "/api/certificates/student/my-certificates",
-        );
-        setCertificates(data);
+        console.log("[CERTIFICATES_FETCH] Fetching certificates for student...");
+        const data = await fetchApi<CertificateItem[]>("/api/certificates/my")
+          .catch(() => fetchApi<CertificateItem[]>("/api/certificates/my-certificates"));
+        console.log(`[CERTIFICATES_FETCH] count=${data?.length || 0}`);
+        setCertificates(data || []);
       } catch (err) {
-        console.error("Failed to load certificates:", err);
+        console.error("[CERTIFICATE_ERROR] Failed to load certificates:", err);
       } finally {
         setLoading(false);
       }

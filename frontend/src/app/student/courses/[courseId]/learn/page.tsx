@@ -40,6 +40,11 @@ export default function CourseLearningPage() {
   const [selectedItem, setSelectedItem] = useState<CurriculumItemStatus | null>(
     null,
   );
+  const selectedItemRef = useRef(selectedItem);
+  useEffect(() => {
+    selectedItemRef.current = selectedItem;
+  }, [selectedItem]);
+
   const [playbackVersion, setPlaybackVersion] = useState(0);
   const completionCelebratedRef = useRef(false);
 
@@ -138,23 +143,23 @@ export default function CourseLearningPage() {
       return;
     }
     if (user && courseId) {
-      // Loading the course status after auth is confirmed is intentional; the
-      // async fetch updates state in the callback, not synchronously in the effect body.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadStatus();
     }
   }, [user, authLoading, courseId, loadStatus, router]);
 
   const handleLectureCompleted = useCallback(async () => {
+    const curItem = selectedItemRef.current;
+    if (!curItem) return;
+
     // 1. Optimistically unlock next item in local curriculum state immediately
     setCurriculum((prevCurriculum) => {
-      if (!prevCurriculum || !selectedItem) return prevCurriculum;
+      if (!prevCurriculum) return prevCurriculum;
       const allItems = [
         ...prevCurriculum.modules.flatMap((m) => m.items),
         ...(prevCurriculum.final_quizzes || []),
       ];
       const curIdx = allItems.findIndex(
-        (it) => it.id === selectedItem.id && it.type === selectedItem.type,
+        (it) => it.id === curItem.id && it.type === curItem.type,
       );
       const nextId =
         curIdx >= 0 && curIdx < allItems.length - 1 ? allItems[curIdx + 1].id : null;
@@ -162,7 +167,7 @@ export default function CourseLearningPage() {
       const updatedModules = prevCurriculum.modules.map((mod) => ({
         ...mod,
         items: mod.items.map((it) => {
-          if (it.id === selectedItem.id && it.type === selectedItem.type) {
+          if (it.id === curItem.id && it.type === curItem.type) {
             return {
               ...it,
               is_completed: true,
@@ -196,11 +201,12 @@ export default function CourseLearningPage() {
     });
 
     await loadStatus();
-  }, [loadStatus, selectedItem]);
+  }, [loadStatus]);
 
   // Realtime progress updater from VideoPlayer
   const handleProgressUpdate = useCallback(
     (percentage: number, isCompleted: boolean) => {
+      const curItem = selectedItemRef.current;
       setSelectedItem((prev) => {
         if (!prev) return prev;
         const currentPct = prev.progress?.completion_percentage || 0;
@@ -238,7 +244,7 @@ export default function CourseLearningPage() {
               let itemCompleted = it.is_completed;
               let itemProg = it.progress;
 
-              if (it.type === "lecture" && it.id === selectedItem?.id) {
+              if (it.type === "lecture" && it.id === curItem?.id) {
                 itemCompleted = true;
                 itemProg = {
                   watched_seconds: it.progress?.watched_seconds || 0,
@@ -301,7 +307,7 @@ export default function CourseLearningPage() {
         });
       }
     },
-    [selectedItem?.id],
+    [],
   );
 
   const selectContentItem = useCallback(

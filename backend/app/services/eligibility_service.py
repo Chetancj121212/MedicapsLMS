@@ -93,7 +93,7 @@ class EligibilityService:
         """
         A lecture is completed when BOTH conditions are met:
         1. Video watch percentage >= lecture.completion_threshold (admin-configured, default 90%)
-        2. Active screen time >= 60% of lecture duration
+        2. Active screen time >= 50% of lecture duration (or 70% of play time)
 
         If the lecture has no duration set (or 0), we rely solely on the
         `completed` flag already set by the progress tracking system.
@@ -101,44 +101,29 @@ class EligibilityService:
         if not progress:
             return False
 
-        # 1. If already marked completed by tracking, trust it
+        # 1. If already marked completed in database, trust it
         if progress.completed:
             return True
 
         threshold_pct = float(lecture.completion_threshold or 90.0)
-
-        # 2. Recorded completion percentage satisfies threshold
-        if progress.completion_percentage is not None and progress.completion_percentage >= threshold_pct:
-            return True
-
         eff_duration = lecture.duration or 0.0
-        if eff_duration <= 0:
-            return bool(progress.completion_percentage and progress.completion_percentage > 0)
 
-        # 3. Calculate watch percentage from accumulated play time
+        if eff_duration <= 0:
+            return bool(progress.completed or (progress.completion_percentage and progress.completion_percentage >= 100.0))
+
+        # 2. Calculate watch percentage from accumulated play time
         play_time = max(
             progress.video_play_time_seconds or 0.0,
             progress.watched_seconds or 0.0,
         )
         watch_pct = min(100.0, round((play_time / eff_duration) * 100.0, 1))
-        if watch_pct >= threshold_pct:
-            return True
+        meets_watch = watch_pct >= threshold_pct
 
-        # 4. Check if student reached near the end of the video
-        last_pos = progress.last_position_seconds or 0.0
-        if last_pos >= (eff_duration * 0.85) or (last_pos >= eff_duration - 5.0 and last_pos > 0):
-            return True
+        # 3. Active screen time verification
+        active_time = progress.active_screen_time_seconds or 0.0
+        meets_active = active_time >= (eff_duration * 0.5) or active_time >= (play_time * 0.7)
 
-        # 5. Active screen time verification
-        active_time = max(
-            progress.active_screen_time_seconds or 0.0,
-            play_time * 0.75 if play_time > 0 else 0.0,
-        )
-        meets_active = active_time >= (eff_duration * 0.5)
-        if watch_pct >= (threshold_pct * 0.8) and meets_active:
-            return True
-
-        return False
+        return meets_watch and meets_active
 
     @staticmethod
     async def check_eligibility(
@@ -289,6 +274,12 @@ class EligibilityService:
 
         result.eligible = all_lectures_done and all_module_quizzes_done and all_finals_done
         result.course_completed = result.eligible
+
+        print(
+            f"[COURSE_COMPLETION] courseId={course_id} studentId={student_id} "
+            f"completedLectures={result.lectures_completed} requiredLectures={result.lectures_total_required} "
+            f"eligible={result.eligible}"
+        )
 
         return result
 

@@ -38,6 +38,11 @@ async def update_lecture_progress(
         await db.refresh(student)
 
     try:
+        print(
+            f"[VIDEO_PROGRESS] incoming: lectureId={lecture_id} studentId={student.id} "
+            f"watchedSeconds={data.watched_seconds} lastPosition={data.last_position_seconds}"
+        )
+
         progress = await progress_service.update_lecture_progress(
             db=db,
             student_id=student.id,
@@ -57,6 +62,12 @@ async def update_lecture_progress(
         lecture = res_lec.scalar_one_or_none()
         threshold = float(lecture.completion_threshold if (lecture and lecture.completion_threshold) else 90.0)
 
+        print(
+            f"[LECTURE_COMPLETION] lectureId={lecture_id} eligible={progress.completed} "
+            f"watchedSeconds={progress.watched_seconds:.1f} completionPercentage={progress.completion_percentage:.1f}% "
+            f"threshold={threshold}%"
+        )
+
         return LectureProgressResponse(
             lecture_id=progress.lecture_id,
             watched_seconds=progress.watched_seconds,
@@ -73,7 +84,11 @@ async def update_lecture_progress(
             last_activity_at=progress.last_activity_at,
         )
     except ValueError as e:
+        print(f"[VIDEO_ERROR] Lecture error: {e}")
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        print(f"[VIDEO_ERROR] Unexpected progress error: {e}")
+        raise
 
 
 @router.get("/{lecture_id}/progress", response_model=LectureProgressResponse)

@@ -33,6 +33,42 @@ function getPlayerDuration(player: Player | null): number | undefined {
     : player.getDuration?.();
 }
 
+function mergeSegments(
+  segments: Array<[number, number]>,
+  maxDuration?: number,
+): Array<[number, number]> {
+  if (!segments || segments.length === 0) return [];
+  const valid: Array<[number, number]> = [];
+  for (const item of segments) {
+    if (Array.isArray(item) && item.length === 2) {
+      const s = Math.max(0, Number(item[0]) || 0);
+      const e = maxDuration
+        ? Math.min(Math.max(0, Number(item[1]) || 0), maxDuration)
+        : Math.max(0, Number(item[1]) || 0);
+      if (e > s) {
+        valid.push([Math.round(s * 10) / 10, Math.round(e * 10) / 10]);
+      }
+    }
+  }
+  if (valid.length === 0) return [];
+  valid.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const merged: Array<[number, number]> = [valid[0]];
+  for (let i = 1; i < valid.length; i++) {
+    const cur = valid[i];
+    const prev = merged[merged.length - 1];
+    if (cur[0] <= prev[1] + 0.5) {
+      prev[1] = Math.max(prev[1], cur[1]);
+    } else {
+      merged.push(cur);
+    }
+  }
+  return merged;
+}
+
+function calculateUniqueWatched(segments: Array<[number, number]>): number {
+  return segments.reduce((sum, [s, e]) => sum + (e - s), 0);
+}
+
 declare global {
   interface Window {
     YT?: {
@@ -122,34 +158,46 @@ export function VideoPlayer({
     videoSourceType || (parseYoutubeId(videoUrl) ? "youtube" : "local");
   const resolvedId =
     sourceType === "youtube" ? parseYoutubeId(videoId || videoUrl) : null;
-  const resumePosition = isCompleted ? 0 : initialPosition;
+
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<Player | null>(null);
-  const lastPositionRef = useRef(resumePosition);
-  const activeTimeRef = useRef(initialActiveScreenTime);
-  const playTimeRef = useRef(initialVideoPlayTime);
-  const playingRef = useRef(false);
-  const lastTickRef = useRef<number | null>(null);
-  const inFlightRef = useRef(false);
-  const syncRef = useRef<(finalize?: boolean) => Promise<void>>(
-    async () => undefined,
-  );
-  const completedRef = useRef(isCompleted);
-  const isCompletedRef = useRef(isCompleted);
-  const onNextRef = useRef(onNext);
-  const endHandledRef = useRef(false);
-  const initialPositionRef = useRef(resumePosition);
 
+  // Stable callback & prop refs to prevent player re-initialization
+  const onCompletedRef = useRef(onCompleted);
+  const onNextRef = useRef(onNext);
+  const onProgressUpdateRef = useRef(onProgressUpdate);
+  const thresholdRef = useRef(completionThreshold);
+  const isCompletedRef = useRef(isCompleted);
+  const completedRef = useRef(isCompleted);
+  const hasResumedRef = useRef(false);
+  const initialPositionRef = useRef(isCompleted ? 0 : initialPosition);
+  const endHandledRef = useRef(false);
+  const inFlightRef = useRef(false);
+
+  // High-precision tracking refs
+  const durationRef = useRef<number>(initialDuration && initialDuration > 0 ? initialDuration : 0);
+  const lastPositionRef = useRef<number>(isCompleted ? 0 : initialPosition);
+  const playTimeRef = useRef<number>(initialVideoPlayTime);
+  const activeTimeRef = useRef<number>(initialActiveScreenTime);
+  const watchedSegmentsRef = useRef<Array<[number, number]>>([]);
+  const currentSegmentStartRef = useRef<number | null>(null);
+  const playingRef = useRef<boolean>(false);
+  const lastTickRef = useRef<number | null>(null);
+
+  const syncRef = useRef<(finalize?: boolean) => Promise<void>>(async () => undefined);
+  const handlePlaybackEndedRef = useRef<() => Promise<void>>(async () => undefined);
+
+  // Rendering state
   const [duration, setDuration] = useState<number | null>(
     initialDuration && initialDuration > 0 ? initialDuration : null,
   );
-  const [watchPercentage, setWatchPercentage] = useState(
+  const [watchPercentage, setWatchPercentage] = useState<number>(
     isCompleted
       ? 100
       : initialPercentage > 0
         ? initialPercentage
-        : initialDuration && initialDuration > 0
-          ? Math.min(100, (initialVideoPlayTime / initialDuration) * 100)
+        : initialDuration && initialDuration > 0 && initialVideoPlayTime > 0
+          ? Math.min(100, Math.round((initialVideoPlayTime / initialDuration) * 100))
           : 0,
   );
   const [isPlaying, setIsPlaying] = useState(false);
@@ -157,29 +205,32 @@ export function VideoPlayer({
   const [completedState, setCompletedState] = useState(isCompleted);
 
   useEffect(() => {
+    onCompletedRef.current = onCompleted;
+  }, [onCompleted]);
+
+  useEffect(() => {
     onNextRef.current = onNext;
   }, [onNext]);
 
   useEffect(() => {
-    initialPositionRef.current = isCompleted ? 0 : initialPosition;
+    onProgressUpdateRef.current = onProgressUpdate;
+  }, [onProgressUpdate]);
+
+  useEffect(() => {
+    thresholdRef.current = completionThreshold;
+  }, [completionThreshold]);
+
+  useEffect(() => {
     isCompletedRef.current = isCompleted;
-    if (isCompleted) lastPositionRef.current = 0;
-  }, [initialPosition, isCompleted]);
+    if (isCompleted) {
+      completedRef.current = true;
+      setCompletedState(true);
+      setWatchPercentage(100);
+      lastPositionRef.current = 0;
+    }
+  }, [isCompleted]);
 
-  const handlePlaybackEnded = useCallback(async () => {
-    if (endHandledRef.current) return;
-    endHandledRef.current = true;
-    setWatchPercentage(100);
-    completedRef.current = true;
-    setCompletedState(true);
-    onProgressUpdate?.(100, true);
-    try {
-      await syncRef.current(true);
-    } catch {}
-    onCompleted?.();
-    if (onNextRef.current) setCountdown(3);
-  }, [onCompleted, onProgressUpdate]);
-
+  // Next lecture countdown timer
   useEffect(() => {
     if (countdown === null) return;
     if (countdown === 0) {
@@ -195,7 +246,7 @@ export function VideoPlayer({
     return () => window.clearTimeout(timer);
   }, [countdown]);
 
-  // Dynamically fetch threshold & latest progress on mount from existing API endpoint
+  // Initial progress & threshold query on mount
   useEffect(() => {
     let isCancelled = false;
     fetchApi<{
@@ -209,73 +260,74 @@ export function VideoPlayer({
     }>(`/api/lectures/${lectureId}/progress`)
       .then((data) => {
         if (isCancelled || !data) return;
-        if (
-          typeof data.video_play_time_seconds === "number" &&
-          data.video_play_time_seconds > playTimeRef.current
-        ) {
+        if (typeof data.completion_threshold === "number" && data.completion_threshold > 0) {
+          thresholdRef.current = data.completion_threshold;
+        }
+        if (typeof data.video_play_time_seconds === "number" && data.video_play_time_seconds > playTimeRef.current) {
           playTimeRef.current = data.video_play_time_seconds;
-        } else if (
-          typeof data.watched_seconds === "number" &&
-          data.watched_seconds > playTimeRef.current
-        ) {
+        } else if (typeof data.watched_seconds === "number" && data.watched_seconds > playTimeRef.current) {
           playTimeRef.current = data.watched_seconds;
         }
-        if (
-          typeof data.active_screen_time_seconds === "number" &&
-          data.active_screen_time_seconds > activeTimeRef.current
-        ) {
+        if (typeof data.active_screen_time_seconds === "number" && data.active_screen_time_seconds > activeTimeRef.current) {
           activeTimeRef.current = data.active_screen_time_seconds;
         }
         if (
           typeof data.last_position_seconds === "number" &&
+          data.last_position_seconds > 0 &&
           lastPositionRef.current === 0 &&
           !isCompletedRef.current
         ) {
+          initialPositionRef.current = data.last_position_seconds;
           lastPositionRef.current = data.last_position_seconds;
         }
         if (data.completed && !completedRef.current) {
+          console.log(`[LECTURE_COMPLETION] eligible=true lectureId=${lectureId} from initial API status`);
           completedRef.current = true;
           setCompletedState(true);
           setWatchPercentage(100);
-          onCompleted?.();
-        } else if (typeof data.completion_percentage === "number") {
+          onCompletedRef.current?.();
+        } else if (typeof data.completion_percentage === "number" && !completedRef.current) {
           setWatchPercentage(data.completion_percentage);
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn("[VIDEO_ERROR] Could not fetch initial progress:", err);
+      });
 
     return () => {
       isCancelled = true;
     };
-  }, [lectureId, onCompleted]);
+  }, [lectureId]);
 
-  useEffect(() => {
-    if (isCompleted) {
-      completedRef.current = true;
-      queueMicrotask(() => {
-        setWatchPercentage(100);
-      });
-    }
-  }, [isCompleted]);
-
+  // Central progress synchronization
   const sync = useCallback(
     async (finalize = false) => {
       if (inFlightRef.current) return;
       const player = playerRef.current;
-      const current =
-        Number(getPlayerCurrentTime(player) ?? lastPositionRef.current) || 0;
-      const playerDuration = Number(getPlayerDuration(player) ?? duration ?? 0);
-      const posPct = playerDuration > 0 ? (current / playerDuration) * 100 : 0;
-      const timePct = playerDuration > 0 ? (playTimeRef.current / playerDuration) * 100 : 0;
-      const effectivePct =
-        finalize || completedRef.current
-          ? 100
-          : playerDuration
-            ? Math.min(100, Math.max(posPct, timePct))
-            : 0;
+      const current = Number(getPlayerCurrentTime(player) ?? lastPositionRef.current) || lastPositionRef.current;
+      const dur = Number(durationRef.current || getPlayerDuration(player) || 0);
+
+      // Collect all continuous segments
+      const allSegments = [...watchedSegmentsRef.current];
+      if (playingRef.current && currentSegmentStartRef.current !== null) {
+        const segStart = currentSegmentStartRef.current;
+        if (current > segStart) {
+          allSegments.push([segStart, current]);
+        }
+      }
+      const merged = mergeSegments(allSegments, dur > 0 ? dur : undefined);
+      const uniqueWatched = Math.max(playTimeRef.current, calculateUniqueWatched(merged));
+      playTimeRef.current = uniqueWatched;
+
+      const uniquePct = dur > 0 ? Math.min(100, Math.round((uniqueWatched / dur) * 1000) / 10) : 0;
+      const effectivePct = completedRef.current ? 100 : uniquePct;
 
       inFlightRef.current = true;
       try {
+        console.log(
+          `[VIDEO_PROGRESS] Syncing: lectureId=${lectureId} watchedSeconds=${uniqueWatched.toFixed(1)} percentage=${effectivePct}% lastPos=${current.toFixed(1)} finalize=${finalize}`
+        );
+
         const response = await fetchApi<{
           completion_percentage: number;
           completed: boolean;
@@ -285,56 +337,81 @@ export function VideoPlayer({
         }>(`/api/lectures/${lectureId}/progress`, {
           method: "POST",
           body: JSON.stringify({
-            watched_seconds: playTimeRef.current,
+            watched_seconds: uniqueWatched,
             completion_percentage: effectivePct,
             last_position_seconds: current,
-            duration: playerDuration || undefined,
-            video_play_time_seconds: playTimeRef.current,
+            duration: dur > 0 ? dur : undefined,
+            video_play_time_seconds: uniqueWatched,
             active_screen_time_seconds: activeTimeRef.current,
+            segments: merged,
             last_activity_at: new Date().toISOString(),
           }),
         });
 
-        const activePct = playerDuration
-          ? Math.min(
-              100,
-              (response.active_screen_time_seconds / playerDuration) * 100,
-            )
-          : 0;
+        if (typeof response.completion_threshold === "number" && response.completion_threshold > 0) {
+          thresholdRef.current = response.completion_threshold;
+        }
 
         const effectiveWatchPct = response.completed
           ? 100
-          : Math.max(response.completion_percentage || 0, effectivePct);
+          : Math.max(response.completion_percentage || 0, uniquePct);
 
         setWatchPercentage(effectiveWatchPct);
-        onProgressUpdate?.(effectiveWatchPct, response.completed, activePct);
+        onProgressUpdateRef.current?.(effectiveWatchPct, response.completed);
 
+        // Completion ONLY happens when verified and confirmed by backend!
         if (response.completed && !completedRef.current) {
+          console.log(`[LECTURE_COMPLETION] eligible=true confirmed by backend for lectureId=${lectureId}`);
           completedRef.current = true;
           setCompletedState(true);
-          onCompleted?.();
+          setWatchPercentage(100);
+          onCompletedRef.current?.();
+          if (onNextRef.current) setCountdown(3);
         }
       } catch (error) {
-        console.warn("Failed to sync lecture progress:", error);
+        console.warn("[VIDEO_ERROR] Failed to sync lecture progress:", error);
       } finally {
         inFlightRef.current = false;
       }
     },
-    [duration, lectureId, onCompleted, onProgressUpdate],
+    [lectureId],
   );
 
   useEffect(() => {
     syncRef.current = sync;
   }, [sync]);
 
-  // YouTube IFrame Player
+  const handlePlaybackEnded = useCallback(async () => {
+    if (endHandledRef.current) return;
+    endHandledRef.current = true;
+    console.log(`[VIDEO_STATE] Playback genuinely ended for lectureId=${lectureId}`);
+    try {
+      await syncRef.current(true);
+    } catch {}
+  }, [lectureId]);
+
+  useEffect(() => {
+    handlePlaybackEndedRef.current = handlePlaybackEnded;
+  }, [handlePlaybackEnded]);
+
+  // YouTube IFrame Player (Lifecycle is isolated and stable)
   useEffect(() => {
     if (sourceType !== "youtube" || !resolvedId || !containerRef.current)
       return;
 
+    console.log(`[VIDEO_INIT] lectureId=${lectureId} videoId=${resolvedId}`);
+
+    let isDisposed = false;
+
     const createPlayer = () => {
       const youtube = window.YT;
-      if (!containerRef.current || !youtube?.Player) return;
+      if (isDisposed || !containerRef.current || !youtube?.Player) return;
+
+      if (playerRef.current && !(playerRef.current instanceof HTMLVideoElement)) {
+        console.log(`[VIDEO_INIT] Player already exists for lectureId=${lectureId}, skipping recreation`);
+        return;
+      }
+
       playerRef.current = new youtube.Player(containerRef.current, {
         videoId: resolvedId,
         width: "100%",
@@ -350,46 +427,94 @@ export function VideoPlayer({
         },
         events: {
           onReady: (event: YouTubeEvent) => {
+            if (isDisposed) return;
             const length = Number(event.target.getDuration?.() || 0);
+            console.log(`[VIDEO_READY] duration=${length}`);
             if (length > 0) {
+              durationRef.current = length;
               setDuration(length);
-              if (playTimeRef.current > 0) {
-                void syncRef.current(false);
-              }
             }
-            const resumePos =
-              initialPositionRef.current > 0
-                ? initialPositionRef.current
-                : lastPositionRef.current;
-            if (resumePos > 0) {
-              event.target.seekTo?.(resumePos, true);
+
+            // Only seek to resume position ONCE, and NEVER seek to the end!
+            if (!hasResumedRef.current) {
+              hasResumedRef.current = true;
+              const targetPos = initialPositionRef.current;
+              if (
+                targetPos > 0 &&
+                (!length || targetPos < length - 3) &&
+                !isCompletedRef.current
+              ) {
+                console.log(`[VIDEO_TIME] Resuming from saved position: currentTime=${targetPos} duration=${length}`);
+                event.target.seekTo?.(targetPos, true);
+              } else {
+                console.log(`[VIDEO_TIME] Starting from position 0 (targetPos=${targetPos}, duration=${length})`);
+              }
             }
           },
           onStateChange: (event: YouTubeEvent) => {
+            if (isDisposed) return;
             const current = Number(
               event.target.getCurrentTime?.() || lastPositionRef.current,
             );
+            const dur = Number(
+              event.target.getDuration?.() || durationRef.current || 0,
+            );
             lastPositionRef.current = current;
 
-            // YouTube PlayerState: PLAYING = 1
-            const playing = event.data === window.YT?.PlayerState.PLAYING;
-            playingRef.current = playing;
-            setIsPlaying(playing);
-            if (playing) endHandledRef.current = false;
+            const isPlayingNow = event.data === window.YT?.PlayerState.PLAYING;
+            const isPaused = event.data === window.YT?.PlayerState.PAUSED;
+            const isEnded = event.data === window.YT?.PlayerState.ENDED;
+            const isBuffering = event.data === window.YT?.PlayerState.BUFFERING;
 
-            // Persist immediately on pause or end
-            if (event.data === window.YT?.PlayerState.ENDED) {
-              handlePlaybackEnded();
-            } else if (event.data === window.YT?.PlayerState.PAUSED) {
+            const stateName = isPlayingNow
+              ? "PLAYING"
+              : isPaused
+                ? "PAUSED"
+                : isEnded
+                  ? "ENDED"
+                  : isBuffering
+                    ? "BUFFERING"
+                    : `STATE_${event.data}`;
+
+            console.log(`[VIDEO_STATE] state=${stateName}`);
+            console.log(`[VIDEO_TIME] currentTime=${current.toFixed(2)} duration=${dur.toFixed(2)}`);
+
+            const wasPlaying = playingRef.current;
+            playingRef.current = isPlayingNow;
+            setIsPlaying(isPlayingNow);
+
+            if (isPlayingNow) {
+              endHandledRef.current = false;
+              if (!wasPlaying) {
+                currentSegmentStartRef.current = current;
+                lastTickRef.current = Date.now();
+              }
+            } else if (wasPlaying) {
+              // Closed segment on pause / buffering / end
+              if (currentSegmentStartRef.current !== null) {
+                const segStart = currentSegmentStartRef.current;
+                if (current > segStart) {
+                  watchedSegmentsRef.current.push([segStart, current]);
+                }
+                currentSegmentStartRef.current = null;
+              }
               void syncRef.current(false);
             }
+
+            if (isEnded) {
+              void handlePlaybackEndedRef.current();
+            }
+          },
+          onError: (event: { data: number }) => {
+            console.warn(`[VIDEO_ERROR] YouTube player error code: ${event.data}`);
           },
         },
       });
     };
 
-    if (window.YT?.Player) createPlayer();
-    else {
+    if (window.YT?.Player) {
+      createPlayer();
+    } else {
       const script =
         document.querySelector(
           "script[src='https://www.youtube.com/iframe_api']",
@@ -398,15 +523,25 @@ export function VideoPlayer({
         script.setAttribute("src", "https://www.youtube.com/iframe_api");
         document.body.appendChild(script);
       }
-      window.onYouTubeIframeAPIReady = createPlayer;
+      const prevCallback = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        prevCallback?.();
+        createPlayer();
+      };
     }
 
     return () => {
+      isDisposed = true;
       const player = playerRef.current;
-      if (player && !(player instanceof HTMLVideoElement)) player.destroy?.();
+      if (player && !(player instanceof HTMLVideoElement)) {
+        try {
+          player.destroy?.();
+        } catch {}
+      }
       playerRef.current = null;
+      hasResumedRef.current = false;
     };
-  }, [handlePlaybackEnded, resolvedId, sourceType]);
+  }, [resolvedId, sourceType, lectureId]);
 
   // Google Drive preview message handling
   useEffect(() => {
@@ -422,20 +557,20 @@ export function VideoPlayer({
       playingRef.current = isPlay;
       setIsPlaying(isPlay);
       if (!isPlay) {
-        if (value.includes("end")) handlePlaybackEnded();
+        if (value.includes("end")) void handlePlaybackEndedRef.current();
         else void syncRef.current(false);
       }
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [handlePlaybackEnded, sourceType]);
+  }, [sourceType]);
 
-  // High-accuracy 1-second tracking loop
+  // High-accuracy 1-second progress tracking loop
   useEffect(() => {
     const timer = window.setInterval(() => {
       const now = Date.now();
       const lastTick = lastTickRef.current ?? now;
-      const elapsed = Math.min(2, (now - lastTick) / 1000);
+      const elapsed = Math.min(2, Math.max(0, (now - lastTick) / 1000));
       lastTickRef.current = now;
 
       const player = playerRef.current;
@@ -448,45 +583,60 @@ export function VideoPlayer({
       const isTabActive = focused();
 
       if (isPlay) {
-        // 1. Video Watch Progress: count playback time only when playing
-        playTimeRef.current += elapsed;
-
-        // 2. Active Screen Time: count only when PLAYING and tab is visible & window focused
         if (isTabActive) {
           activeTimeRef.current += elapsed;
         }
-      }
 
-      const length = Number(getPlayerDuration(player) ?? duration ?? 0);
-      if (length > 0) {
-        const posPct = (current / length) * 100;
-        const timePct = (playTimeRef.current / length) * 100;
-        const watchPct = Math.min(100, Math.max(posPct, timePct));
-        setWatchPercentage(watchPct);
-
-        const thresh = completionThreshold || 90;
-        if (
-          (watchPct >= thresh || current >= length - 2) &&
-          !completedRef.current &&
-          !endHandledRef.current
-        ) {
-          void handlePlaybackEnded();
+        if (currentSegmentStartRef.current === null) {
+          currentSegmentStartRef.current = current;
         }
       }
 
-      // Sync periodically every 3 seconds while playing
-      if (now % 3000 < 1100 && isPlay) {
-        void syncRef.current();
+      // Calculate total unique watched seconds from segments
+      const allSegments = [...watchedSegmentsRef.current];
+      if (isPlay && currentSegmentStartRef.current !== null) {
+        const segStart = currentSegmentStartRef.current;
+        if (current > segStart) {
+          allSegments.push([segStart, current]);
+        }
+      }
+
+      const dur = Number(durationRef.current || getPlayerDuration(player) || 0);
+      const merged = mergeSegments(allSegments, dur > 0 ? dur : undefined);
+      const uniqueWatched = Math.max(playTimeRef.current, calculateUniqueWatched(merged));
+      playTimeRef.current = uniqueWatched;
+
+      if (dur > 0) {
+        const uniquePct = Math.min(100, Math.round((uniqueWatched / dur) * 1000) / 10);
+        if (!completedRef.current) {
+          setWatchPercentage(uniquePct);
+        }
+
+        console.log(
+          `[VIDEO_PROGRESS] watchedSeconds=${uniqueWatched.toFixed(1)} watchedPercentage=${uniquePct}% activeScreenTime=${activeTimeRef.current.toFixed(1)}`
+        );
+
+        // When requirements genuinely satisfied, trigger sync to complete
+        const thresh = thresholdRef.current || 90;
+        if (uniquePct >= thresh && !completedRef.current && !endHandledRef.current) {
+          console.log(`[LECTURE_COMPLETION] eligible=true (uniquePct=${uniquePct}% >= thresh=${thresh}%)`);
+          void syncRef.current(true);
+        }
+      }
+
+      // Periodic sync every 5 seconds while playing
+      if (isPlay && now % 5000 < 1100) {
+        void syncRef.current(false);
       }
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [completionThreshold, duration, handlePlaybackEnded]);
+  }, []);
 
   // Persist on visibility change, blur, and page exit
   useEffect(() => {
     const handleVisibilityOrBlur = () => {
-      void syncRef.current(true);
+      void syncRef.current(false);
     };
 
     const handleFocus = () => {
@@ -494,7 +644,7 @@ export function VideoPlayer({
     };
 
     const handlePageExit = () => {
-      void syncRef.current(true);
+      void syncRef.current(false);
     };
 
     document.addEventListener("visibilitychange", handleVisibilityOrBlur);
@@ -556,22 +706,28 @@ export function VideoPlayer({
             onLoadedMetadata={(event) => {
               const element = event.currentTarget;
               playerRef.current = element;
-              if (element.duration > 0) {
-                setDuration(element.duration);
-                if (playTimeRef.current > 0) {
-                  void sync(false);
+              const length = element.duration;
+              console.log(`[VIDEO_READY] duration=${length}`);
+              if (length > 0) {
+                durationRef.current = length;
+                setDuration(length);
+              }
+              if (!hasResumedRef.current) {
+                hasResumedRef.current = true;
+                const targetPos = initialPositionRef.current;
+                if (targetPos > 0 && targetPos < length - 3 && !isCompletedRef.current) {
+                  console.log(`[VIDEO_TIME] Local video resuming from: ${targetPos}`);
+                  element.currentTime = targetPos;
                 }
               }
-              const resumePos =
-                initialPosition > 0 ? initialPosition : lastPositionRef.current;
-              if (resumePos > 0 && element.currentTime === 0) {
-                element.currentTime = resumePos;
-              }
             }}
-            onPlay={() => {
+            onPlay={(event) => {
               endHandledRef.current = false;
               playingRef.current = true;
               setIsPlaying(true);
+              currentSegmentStartRef.current = event.currentTarget.currentTime;
+              lastTickRef.current = Date.now();
+              console.log(`[VIDEO_STATE] state=PLAYING`);
             }}
             onPlaying={() => {
               endHandledRef.current = false;
@@ -581,21 +737,29 @@ export function VideoPlayer({
             onPause={(event) => {
               playingRef.current = false;
               setIsPlaying(false);
-              lastPositionRef.current = event.currentTarget.currentTime;
-              void sync(true);
+              const current = event.currentTarget.currentTime;
+              lastPositionRef.current = current;
+              if (currentSegmentStartRef.current !== null) {
+                const segStart = currentSegmentStartRef.current;
+                if (current > segStart) {
+                  watchedSegmentsRef.current.push([segStart, current]);
+                }
+                currentSegmentStartRef.current = null;
+              }
+              console.log(`[VIDEO_STATE] state=PAUSED`);
+              void syncRef.current(false);
             }}
             onWaiting={() => {
-              // Buffering state: stop counting!
               playingRef.current = false;
               setIsPlaying(false);
+              console.log(`[VIDEO_STATE] state=BUFFERING`);
             }}
             onSeeking={(event) => {
               lastPositionRef.current = event.currentTarget.currentTime;
             }}
             onSeeked={(event) => {
               lastPositionRef.current = event.currentTarget.currentTime;
-              const isPlay =
-                !event.currentTarget.paused && !event.currentTarget.ended;
+              const isPlay = !event.currentTarget.paused && !event.currentTarget.ended;
               playingRef.current = isPlay;
               setIsPlaying(isPlay);
             }}
@@ -603,7 +767,8 @@ export function VideoPlayer({
               playingRef.current = false;
               setIsPlaying(false);
               lastPositionRef.current = event.currentTarget.currentTime;
-              void handlePlaybackEnded();
+              console.log(`[VIDEO_STATE] state=ENDED`);
+              void handlePlaybackEndedRef.current();
             }}
             onTimeUpdate={(event) => {
               lastPositionRef.current = event.currentTarget.currentTime;

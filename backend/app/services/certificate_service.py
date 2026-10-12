@@ -255,7 +255,7 @@ class CertificateService:
     async def issue_certificate_if_eligible(
         db: AsyncSession, student_id: int, course_id: int
     ) -> Optional[Certificate]:
-        # Check if already issued
+        # 1. Idempotency: return existing certificate if already issued
         stmt = select(Certificate).where(
             and_(
                 Certificate.student_id == student_id,
@@ -266,16 +266,16 @@ class CertificateService:
         res = await db.execute(stmt)
         existing = res.scalar_one_or_none()
         if existing:
+            print(f"[CERTIFICATE] existing=True created=False certificateNumber={existing.certificate_number}")
             return existing
 
         # ── FINAL ELIGIBILITY CHECK before issuing ──────────────────────
-        # This is the gatekeeper: no certificate is issued unless every
-        # mandatory requirement is confirmed satisfied in the database.
         from app.services.eligibility_service import EligibilityService
         eligibility = await EligibilityService.check_eligibility(
             db, student_id, course_id
         )
         if not eligibility.eligible:
+            print(f"[CERTIFICATE] existing=False created=False eligible=False (student {student_id} not eligible for course {course_id})")
             return None
 
         # Fetch student and course
@@ -286,6 +286,7 @@ class CertificateService:
         course = res_course.scalar_one_or_none()
 
         if not student or not course:
+            print(f"[CERTIFICATE_ERROR] Student {student_id} or Course {course_id} not found")
             return None
 
         cert_number = await CertificateService.generate_certificate_number(db)
@@ -300,19 +301,22 @@ class CertificateService:
         # Verification URL (Section 23 & 40)
         verify_url = f"{settings.FRONTEND_URL}/verify/{cert_number}"
 
-        # Generate QR code
-        CertificateService.generate_qr_code(verify_url, qr_path)
+        try:
+            # Generate QR code
+            CertificateService.generate_qr_code(verify_url, qr_path)
 
-        # Generate PDF
-        CertificateService.generate_pdf(
-            certificate_number=cert_number,
-            student_name=student.full_name,
-            enrollment_number=student.enrollment_number,
-            course_name=course.title,
-            completion_date=issued_date_str,
-            qr_image_path=qr_path,
-            output_pdf_path=pdf_path,
-        )
+            # Generate PDF
+            CertificateService.generate_pdf(
+                certificate_number=cert_number,
+                student_name=student.full_name,
+                enrollment_number=student.enrollment_number,
+                course_name=course.title,
+                completion_date=issued_date_str,
+                qr_image_path=qr_path,
+                output_pdf_path=pdf_path,
+            )
+        except Exception as e:
+            print(f"[CERTIFICATE_ERROR] Error generating PDF/QR for {cert_number}: {e}")
 
         cert = Certificate(
             certificate_number=cert_number,
@@ -325,6 +329,8 @@ class CertificateService:
         db.add(cert)
         await db.commit()
         await db.refresh(cert)
+
+        print(f"[CERTIFICATE] existing=False created=True certificateNumber={cert.certificate_number}")
         return cert
 
 
