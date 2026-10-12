@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
@@ -89,6 +89,13 @@ class ProgressService:
         active_screen_time_seconds: Optional[float] = 0.0,
         last_activity_at: Optional[datetime] = None,
     ) -> LectureProgress:
+        # Ensure last_activity_at is a timezone-naive UTC datetime
+        if last_activity_at is not None:
+            if last_activity_at.tzinfo is not None:
+                last_activity_at = last_activity_at.astimezone(timezone.utc).replace(tzinfo=None)
+        else:
+            last_activity_at = datetime.utcnow()
+
         stmt = select(Lecture).options(selectinload(Lecture.module)).where(Lecture.id == lecture_id)
         res = await db.execute(stmt)
         lecture = res.scalar_one_or_none()
@@ -175,7 +182,7 @@ class ProgressService:
                 youtube_play_time_seconds=current_play_time if lecture.video_source_type == "youtube" else 0.0,
                 video_play_time_seconds=current_play_time,
                 active_screen_time_seconds=current_active_time,
-                last_activity_at=last_activity_at or datetime.utcnow(),
+                last_activity_at=last_activity_at,
                 completed=is_now_completed,
                 completed_at=datetime.utcnow() if is_now_completed else None,
                 last_watched_at=datetime.utcnow(),
@@ -189,8 +196,7 @@ class ProgressService:
             progress.active_screen_time_seconds = current_active_time
             progress.completion_percentage = final_pct
             progress.last_position_seconds = last_position_seconds
-            if last_activity_at:
-                progress.last_activity_at = last_activity_at
+            progress.last_activity_at = last_activity_at
             progress.last_watched_at = datetime.utcnow()
             if is_now_completed:
                 progress.completed = True

@@ -3,7 +3,7 @@
 import json
 from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -437,6 +437,13 @@ class LectureProgressUpdate(BaseModel):
     video_play_time_seconds: Optional[float] = 0.0
     active_screen_time_seconds: Optional[float] = 0.0
     last_activity_at: Optional[datetime] = None
+
+    @field_validator("last_activity_at", mode="after")
+    @classmethod
+    def ensure_naive_datetime(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is not None and v.tzinfo is not None:
+            return v.astimezone(timezone.utc).replace(tzinfo=None)
+        return v
 
 
 class LectureProgressResponse(BaseModel):
