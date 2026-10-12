@@ -59,7 +59,7 @@ docker compose exec backend python -m app.seed
 ```
 
 Open `http://localhost:3000`. The API health endpoint is available at
-`http://localhost:8000/api/health`.
+`http://localhost:8000/api/health`..
 
 Useful commands:
 
