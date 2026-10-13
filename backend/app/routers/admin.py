@@ -41,14 +41,21 @@ from app.schemas.schemas import (
     AdminEnrollmentUpdate,
     AdminIssueCertificateRequest,
 )
-from app.services.auth_service import require_content_admin, hash_password
-from app.services.storage.local import storage_service
+from app.services.auth_service import (
+    require_content_admin,
+    require_dept_admin,
+    require_master_admin,
+    require_instructor,
+    hash_password,
+)
+from app.services.storage.local import storage_service, verify_mp4_magic_bytes
 from app.utils.video import (
     detect_video_source,
     get_mp4_duration,
     get_youtube_duration,
     get_google_drive_duration,
 )
+from app.limiter import limiter
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"], dependencies=[Depends(require_content_admin)])
 
@@ -379,7 +386,16 @@ async def add_lecture(
     if video_file and video_file.filename:
         # Validate format
         if not video_file.filename.lower().endswith(".mp4"):
-            raise HTTPException(status_code=400, detail="Only MP4 video format is supported for prototype")
+            raise HTTPException(status_code=400, detail="Only MP4 video format is supported")
+
+        # Verify MIME / file signature magic bytes
+        header = await video_file.read(64)
+        await video_file.seek(0)
+        if not verify_mp4_magic_bytes(header):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid MP4 file: content does not match ISO Base Media / MP4 format signature.",
+            )
 
         uploaded_rel_path = await storage_service.upload(
             video_file.file, video_file.filename, subfolder="videos"
@@ -816,7 +832,7 @@ async def get_student_detail(student_id: int, db: AsyncSession = Depends(get_db)
 @router.post("/students")
 async def create_student(
     data: StudentCreate,
-    current_user: User = Depends(require_content_admin),
+    current_user: User = Depends(require_dept_admin),
     db: AsyncSession = Depends(get_db),
 ):
     # Check duplicate enrollment number
@@ -865,7 +881,7 @@ async def create_student(
 async def update_student(
     student_id: int,
     data: StudentUpdate,
-    current_user: User = Depends(require_content_admin),
+    current_user: User = Depends(require_dept_admin),
     db: AsyncSession = Depends(get_db),
 ):
     student = (await db.execute(select(Student).where(Student.id == student_id))).scalar_one_or_none()
@@ -894,7 +910,7 @@ async def update_student(
 @router.delete("/students/{student_id}")
 async def delete_student(
     student_id: int,
-    current_user: User = Depends(require_content_admin),
+    current_user: User = Depends(require_master_admin),
     db: AsyncSession = Depends(get_db),
 ):
     student = (await db.execute(select(Student).where(Student.id == student_id))).scalar_one_or_none()
@@ -1066,6 +1082,7 @@ async def delete_enrollment(enrollment_id: int, db: AsyncSession = Depends(get_d
 async def reset_student_password(
     student_id: int,
     data: ResetPasswordRequest,
+    current_user: User = Depends(require_dept_admin),
     db: AsyncSession = Depends(get_db),
 ):
     student = (await db.execute(select(Student).where(Student.id == student_id))).scalar_one_or_none()
@@ -1077,14 +1094,27 @@ async def reset_student_password(
         raise HTTPException(status_code=404, detail="User account not found")
 
     user.password_hash = hash_password(data.new_password)
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    record_admin_audit(db, current_user, "PASSWORD_RESET", f"user:{user.id}", {"target": "student", "student_id": student.id})
     await db.commit()
     return {"message": "Password reset successfully"}
 
 
 @router.post("/students/import-csv")
-async def import_students_csv(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+async def import_students_csv(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_dept_admin),
+    db: AsyncSession = Depends(get_db),
+):
     """CSV Import supporting: full_name, enrollment_number, password, email, semester, academic_year."""
-    content = await file.read()
+    MAX_CSV_SIZE = 10 * 1024 * 1024  # 10MB limit
+    content = await file.read(MAX_CSV_SIZE + 1)
+    if len(content) > MAX_CSV_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="CSV file exceeds maximum allowed size of 10MB.",
+        )
     decoded = content.decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(decoded))
 
@@ -1094,7 +1124,7 @@ async def import_students_csv(file: UploadFile = File(...), db: AsyncSession = D
     for row_idx, row in enumerate(reader, start=2):
         name = row.get("full_name") or row.get("name")
         enr = row.get("enrollment_number") or row.get("enrollment")
-        pwd = row.get("password") or "Medicaps@123"
+        pwd = row.get("password") or "Medicaps@2026!ECE"
         email = row.get("email")
         sem = row.get("semester")
 
@@ -1133,6 +1163,7 @@ async def import_students_csv(file: UploadFile = File(...), db: AsyncSession = D
         except Exception as e:
             errors.append(f"Row {row_idx}: Failed to add - {str(e)}")
 
+    record_admin_audit(db, current_user, "STUDENTS_CSV_IMPORT", "students:bulk", {"created_count": created, "errors_count": len(errors)})
     await db.commit()
     return {"created_count": created, "errors": errors}
 
@@ -1167,7 +1198,7 @@ async def list_all_certificates(db: AsyncSession = Depends(get_db)):
 @router.post("/certificates/{certificate_id}/revoke")
 async def toggle_revoke_certificate(
     certificate_id: int,
-    current_user: User = Depends(require_content_admin),
+    current_user: User = Depends(require_dept_admin),
     db: AsyncSession = Depends(get_db),
 ):
     cert = (await db.execute(select(Certificate).where(Certificate.id == certificate_id))).scalar_one_or_none()
@@ -1189,7 +1220,7 @@ async def toggle_revoke_certificate(
 @router.post("/certificates/issue")
 async def admin_issue_certificate(
     data: AdminIssueCertificateRequest,
-    current_user: User = Depends(require_content_admin),
+    current_user: User = Depends(require_master_admin),
     db: AsyncSession = Depends(get_db),
 ):
     student = (await db.execute(select(Student).where(Student.id == data.student_id))).scalar_one_or_none()
@@ -1204,7 +1235,7 @@ async def admin_issue_certificate(
     cert = await CertificateService.issue_certificate(db, student.id, course.id)
     if not cert:
         raise HTTPException(status_code=500, detail="Failed to issue certificate")
-    record_admin_audit(db, current_user, "CERTIFICATE_ISSUED", f"certificate:{cert.id}", {"student_id": student.id, "course_id": course.id})
+    record_admin_audit(db, current_user, "CERTIFICATE_MANUALLY_ISSUED", f"certificate:{cert.id}", {"student_id": student.id, "course_id": course.id})
 
     return {
         "message": "Certificate issued successfully",
@@ -1214,11 +1245,16 @@ async def admin_issue_certificate(
 
 
 @router.delete("/certificates/{certificate_id}")
-async def delete_certificate(certificate_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_certificate(
+    certificate_id: int,
+    current_user: User = Depends(require_master_admin),
+    db: AsyncSession = Depends(get_db),
+):
     cert = (await db.execute(select(Certificate).where(Certificate.id == certificate_id))).scalar_one_or_none()
     if not cert:
         raise HTTPException(status_code=404, detail="Certificate not found")
 
+    record_admin_audit(db, current_user, "CERTIFICATE_DELETED", f"certificate:{certificate_id}", {"certificate_number": cert.certificate_number})
     await db.delete(cert)
     await db.commit()
     return {"message": "Certificate deleted successfully"}

@@ -1,10 +1,23 @@
 """Pydantic schemas for all API request/response models."""
 
 import json
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
+
+
+def validate_strong_password(value: str) -> str:
+    """Enforces at least 8 characters, an uppercase letter, lowercase letter, and a digit or special character."""
+    if len(value) < 8:
+        raise ValueError("Password must be at least 8 characters long")
+    if not any(c.isupper() for c in value):
+        raise ValueError("Password must contain at least one uppercase letter")
+    if not any(c.islower() for c in value):
+        raise ValueError("Password must contain at least one lowercase letter")
+    if not any(c.isdigit() or not c.isalnum() for c in value):
+        raise ValueError("Password must contain at least one digit or special character")
+    return value
 
 
 # ─── Auth ────────────────────────────────────────────────────────────────────
@@ -36,19 +49,17 @@ class UserResponse(BaseModel):
 
 
 class AdminCreate(BaseModel):
-    full_name: str
+    full_name: str = Field(..., min_length=2, max_length=200)
     email: EmailStr
-    username: str
+    username: str = Field(..., min_length=3, max_length=100)
     password: str
-    department: Optional[str] = None
+    department: Optional[str] = Field(None, max_length=200)
     is_active: bool = True
 
     @field_validator("password")
     @classmethod
     def validate_password(cls, value: str) -> str:
-        if len(value) < 8:
-            raise ValueError("Password must be at least 8 characters")
-        return value
+        return validate_strong_password(value)
 
 
 class AdminUpdate(BaseModel):
@@ -79,23 +90,28 @@ class AdminResponse(BaseModel):
 # ─── Student ─────────────────────────────────────────────────────────────────
 
 class StudentCreate(BaseModel):
-    full_name: str
-    enrollment_number: str
+    full_name: str = Field(..., min_length=2, max_length=200)
+    enrollment_number: str = Field(..., min_length=3, max_length=100)
     password: str
-    email: Optional[str] = None
-    department: Optional[str] = "Electronics and Communication Engineering"
-    program: Optional[str] = None
-    semester: Optional[int] = None
-    academic_year: Optional[str] = None
+    email: Optional[str] = Field(None, max_length=320)
+    department: Optional[str] = Field("Electronics and Communication Engineering", max_length=200)
+    program: Optional[str] = Field(None, max_length=100)
+    semester: Optional[int] = Field(None, ge=1, le=12)
+    academic_year: Optional[str] = Field(None, max_length=50)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return validate_strong_password(value)
 
 
 class StudentUpdate(BaseModel):
-    full_name: Optional[str] = None
-    email: Optional[str] = None
-    department: Optional[str] = None
-    program: Optional[str] = None
-    semester: Optional[int] = None
-    academic_year: Optional[str] = None
+    full_name: Optional[str] = Field(None, max_length=200)
+    email: Optional[str] = Field(None, max_length=320)
+    department: Optional[str] = Field(None, max_length=200)
+    program: Optional[str] = Field(None, max_length=100)
+    semester: Optional[int] = Field(None, ge=1, le=12)
+    academic_year: Optional[str] = Field(None, max_length=50)
 
 
 class StudentResponse(BaseModel):
@@ -121,9 +137,17 @@ class ResetPasswordRequest(BaseModel):
     @field_validator("new_password")
     @classmethod
     def validate_password(cls, value: str) -> str:
-        if len(value) < 8:
-            raise ValueError("Password must be at least 8 characters")
-        return value
+        return validate_strong_password(value)
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return validate_strong_password(value)
 
 
 # ─── Course ──────────────────────────────────────────────────────────────────
@@ -429,20 +453,24 @@ class QuizAttemptResponse(BaseModel):
 # ─── Progress ────────────────────────────────────────────────────────────────
 
 class LectureProgressUpdate(BaseModel):
-    watched_seconds: Optional[float] = 0.0
-    completion_percentage: Optional[float] = 0.0
-    last_position_seconds: float = 0.0
+    watched_seconds: Optional[float] = Field(default=0.0, ge=0.0, le=86400.0)
+    completion_percentage: Optional[float] = Field(default=0.0, ge=0.0, le=100.0)
+    last_position_seconds: float = Field(default=0.0, ge=0.0, le=86400.0)
     segments: Optional[List[List[float]]] = None
-    duration: Optional[float] = None
-    video_play_time_seconds: Optional[float] = 0.0
-    active_screen_time_seconds: Optional[float] = 0.0
+    duration: Optional[float] = Field(default=None, ge=0.0, le=86400.0)
+    video_play_time_seconds: Optional[float] = Field(default=0.0, ge=0.0, le=86400.0)
+    active_screen_time_seconds: Optional[float] = Field(default=0.0, ge=0.0, le=86400.0)
     last_activity_at: Optional[datetime] = None
 
     @field_validator("last_activity_at", mode="after")
     @classmethod
-    def ensure_naive_datetime(cls, v: Optional[datetime]) -> Optional[datetime]:
-        if v is not None and v.tzinfo is not None:
-            return v.astimezone(timezone.utc).replace(tzinfo=None)
+    def validate_last_activity_at(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is not None:
+            if v.tzinfo is not None:
+                v = v.astimezone(timezone.utc).replace(tzinfo=None)
+            now = datetime.utcnow()
+            if v > now + timedelta(seconds=15):
+                raise ValueError("last_activity_at cannot be in the future")
         return v
 
 

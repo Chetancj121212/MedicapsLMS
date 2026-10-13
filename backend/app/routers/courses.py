@@ -130,6 +130,17 @@ async def get_learning_path(
         await db.commit()
         await db.refresh(student)
 
+    # Verify that the student is enrolled in this course before returning curriculum
+    enr_stmt = select(Enrollment).where(
+        and_(Enrollment.student_id == student.id, Enrollment.course_id == course_id)
+    )
+    enr_res = await db.execute(enr_stmt)
+    if not enr_res.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not enrolled in this course.",
+        )
+
     try:
         curriculum_status = await progress_service.get_course_curriculum_status(
             db, student.id, course_id
@@ -172,6 +183,17 @@ async def check_course_eligibility(
     student = res_stud.scalar_one_or_none()
     if not student:
         raise HTTPException(status_code=403, detail="Student profile not found")
+
+    # Verify that the student is enrolled in this course
+    enr_stmt = select(Enrollment).where(
+        and_(Enrollment.student_id == student.id, Enrollment.course_id == course_id)
+    )
+    enr_res = await db.execute(enr_stmt)
+    if not enr_res.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not enrolled in this course.",
+        )
 
     from app.services.eligibility_service import eligibility_service
     eligibility = await eligibility_service.check_eligibility(db, student.id, course_id)

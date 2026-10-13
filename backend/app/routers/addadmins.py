@@ -2,15 +2,16 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.audit import AuditLog
 from app.models.user import User, UserRole
-from app.schemas.schemas import AdminCreate, AdminResponse, AdminStatusUpdate, AdminUpdate
+from app.schemas.schemas import AdminCreate, AdminResponse, AdminStatusUpdate, AdminUpdate, ResetPasswordRequest
 from app.services.auth_service import hash_password, require_master_admin
+from app.limiter import limiter
 
 router = APIRouter(
     prefix="/api/addadmins",
@@ -177,3 +178,20 @@ async def delete_admin(
             raise HTTPException(status_code=409, detail="The last active Master Admin cannot be deleted")
     await write_audit(db, current_user, "ADMIN_DELETED", user.id, {"username": user.username})
     await db.delete(user)
+
+
+@router.post("/{admin_id}/reset-password")
+async def reset_admin_password(
+    admin_id: int,
+    data: ResetPasswordRequest,
+    current_user: User = Depends(require_master_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Emergency isolated password reset for administrator accounts executed by Master Admin."""
+    user = await get_admin_or_404(admin_id, db)
+    user.password_hash = hash_password(data.new_password)
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    await write_audit(db, current_user, "ADMIN_PASSWORD_RESET", user.id, {"target_username": user.username})
+    await db.commit()
+    return {"message": f"Password for administrator '{user.username}' reset successfully"}

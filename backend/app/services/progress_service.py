@@ -88,13 +88,17 @@ class ProgressService:
         video_play_time_seconds: Optional[float] = 0.0,
         active_screen_time_seconds: Optional[float] = 0.0,
         last_activity_at: Optional[datetime] = None,
+        enforce_heartbeat_delta: bool = False,
     ) -> LectureProgress:
-        # Ensure last_activity_at is a timezone-naive UTC datetime
+        now = datetime.utcnow()
+        # Ensure last_activity_at is a timezone-naive UTC datetime and not in the future
         if last_activity_at is not None:
             if last_activity_at.tzinfo is not None:
                 last_activity_at = last_activity_at.astimezone(timezone.utc).replace(tzinfo=None)
+            if last_activity_at > now:
+                last_activity_at = now
         else:
-            last_activity_at = datetime.utcnow()
+            last_activity_at = now
 
         stmt = select(Lecture).options(selectinload(Lecture.module)).where(Lecture.id == lecture_id)
         res = await db.execute(stmt)
@@ -146,20 +150,40 @@ class ProgressService:
         merged_segments = merge_segments(all_segments, max_duration=eff_duration if eff_duration > 0 else None)
         unique_from_segments = calculate_unique_watched(merged_segments)
 
-        # Unique watched playback seconds
+        client_play = max(float(video_play_time_seconds or 0.0), float(watched_seconds or 0.0))
+        client_active = float(active_screen_time_seconds or 0.0)
+
+        # Enforce delta limits when requested (API updates from client)
+        if enforce_heartbeat_delta:
+            if not progress or not progress.last_watched_at:
+                # First progress submission: allow at most 30 seconds
+                client_play = min(client_play, 30.0)
+                client_active = min(client_active, 30.0)
+            else:
+                elapsed = max(1.0, (now - progress.last_watched_at).total_seconds())
+                max_delta = max(15.0, elapsed * 2.0 + 5.0)
+                prev_play = progress.video_play_time_seconds or progress.watched_seconds or 0.0
+                prev_active = progress.active_screen_time_seconds or 0.0
+                client_play = min(client_play, prev_play + max_delta)
+                client_active = min(client_active, prev_active + max_delta)
+
+        # Unique watched playback seconds bounded by duration
         current_play_time = max(
             unique_from_segments,
             progress.video_play_time_seconds if progress else 0.0,
             progress.watched_seconds if progress else 0.0,
-            float(video_play_time_seconds or 0.0),
-            float(watched_seconds or 0.0),
+            client_play,
         )
+        if eff_duration > 0:
+            current_play_time = min(eff_duration, current_play_time)
 
         # Active Screen Time: only when video is in PLAYING state and tab is focused/visible
         raw_active_time = max(
             progress.active_screen_time_seconds if progress else 0.0,
-            float(active_screen_time_seconds or 0.0),
+            client_active,
         )
+        if eff_duration > 0:
+            raw_active_time = min(eff_duration * 1.5, raw_active_time)
         current_active_time = max(raw_active_time, current_play_time * 0.75) if current_play_time > 0 else raw_active_time
 
         if eff_duration > 0:
@@ -376,10 +400,10 @@ class ProgressService:
                     "type": "lecture",
                     "title": lec.title,
                     "duration": lec.duration,
-                    "video_path": lec.video_path,
-                    "video_source_type": lec.video_source_type,
-                    "video_source_url": lec.video_source_url,
-                    "video_id": lec.video_id,
+                    "video_path": lec.video_path if not is_locked else None,
+                    "video_source_type": lec.video_source_type if not is_locked else None,
+                    "video_source_url": lec.video_source_url if not is_locked else None,
+                    "video_id": lec.video_id if not is_locked else None,
                     "is_locked": is_locked,
                     "is_completed": is_completed,
                     "lock_reason": lock_reason,
@@ -511,5 +535,43 @@ class ProgressService:
         )
         return eligibility.eligible
 
+    @staticmethod
+    async def is_lecture_locked(db: AsyncSession, student_id: int, lecture_id: int) -> bool:
+        """Check if a lecture is locked for the student according to sequential course progression."""
+        stmt = select(Lecture).options(selectinload(Lecture.module)).where(Lecture.id == lecture_id)
+        res = await db.execute(stmt)
+        lecture = res.scalar_one_or_none()
+        if not lecture or not lecture.module:
+            return True
+        course_id = lecture.module.course_id
+        curriculum = await ProgressService.get_course_curriculum_status(db, student_id, course_id)
+        for mod in curriculum.get("modules", []):
+            for item in mod.get("items", []):
+                if item.get("type") == "lecture" and item.get("id") == lecture_id:
+                    return bool(item.get("is_locked"))
+        return False
+
+    @staticmethod
+    async def is_quiz_locked(db: AsyncSession, student_id: int, quiz_id: int) -> bool:
+        """Check if a quiz is locked for the student according to sequential course progression."""
+        stmt = select(Quiz).options(selectinload(Quiz.module)).where(Quiz.id == quiz_id)
+        res = await db.execute(stmt)
+        quiz = res.scalar_one_or_none()
+        if not quiz:
+            return True
+        course_id = quiz.course_id or (quiz.module.course_id if quiz.module else None)
+        if not course_id:
+            return False
+        curriculum = await ProgressService.get_course_curriculum_status(db, student_id, course_id)
+        for mod in curriculum.get("modules", []):
+            for item in mod.get("items", []):
+                if item.get("type") == "quiz" and item.get("id") == quiz_id:
+                    return bool(item.get("is_locked"))
+        for final_q in curriculum.get("final_quizzes", []):
+            if final_q.get("id") == quiz_id:
+                return bool(final_q.get("is_locked"))
+        return False
+
 
 progress_service = ProgressService()
+

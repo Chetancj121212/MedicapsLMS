@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.lecture import Lecture
@@ -37,6 +38,34 @@ async def update_lecture_progress(
         await db.commit()
         await db.refresh(student)
 
+    stmt_lec = select(Lecture).options(selectinload(Lecture.module)).where(Lecture.id == lecture_id)
+    res_lec = await db.execute(stmt_lec)
+    lecture = res_lec.scalar_one_or_none()
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+    if not lecture.module:
+        raise HTTPException(status_code=400, detail="Lecture has no associated module")
+
+    # 1. Verify active enrollment in the course containing this lecture (IDOR prevention)
+    from app.models.enrollment import Enrollment
+    enr_stmt = select(Enrollment).where(
+        and_(Enrollment.student_id == student.id, Enrollment.course_id == lecture.module.course_id)
+    )
+    enr_res = await db.execute(enr_stmt)
+    if not enr_res.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not enrolled in the course for this lecture.",
+        )
+
+    # 2. Verify lecture is unlocked sequentially (Sequential unlocking enforcement)
+    is_locked = await progress_service.is_lecture_locked(db, student.id, lecture_id)
+    if is_locked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot submit progress for a locked lecture. Complete previous prerequisites first.",
+        )
+
     try:
         print(
             f"[VIDEO_PROGRESS] incoming: lectureId={lecture_id} studentId={student.id} "
@@ -55,11 +84,9 @@ async def update_lecture_progress(
             video_play_time_seconds=data.video_play_time_seconds,
             active_screen_time_seconds=data.active_screen_time_seconds,
             last_activity_at=data.last_activity_at,
+            enforce_heartbeat_delta=True,
         )
 
-        stmt_lec = select(Lecture).where(Lecture.id == lecture_id)
-        res_lec = await db.execute(stmt_lec)
-        lecture = res_lec.scalar_one_or_none()
         threshold = float(lecture.completion_threshold if (lecture and lecture.completion_threshold) else 90.0)
 
         print(
@@ -111,9 +138,24 @@ async def get_lecture_progress(
         await db.commit()
         await db.refresh(student)
 
-    stmt_lec = select(Lecture).where(Lecture.id == lecture_id)
+    stmt_lec = select(Lecture).options(selectinload(Lecture.module)).where(Lecture.id == lecture_id)
     res_lec = await db.execute(stmt_lec)
     lecture = res_lec.scalar_one_or_none()
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+
+    from app.models.enrollment import Enrollment
+    if lecture.module:
+        enr_stmt = select(Enrollment).where(
+            and_(Enrollment.student_id == student.id, Enrollment.course_id == lecture.module.course_id)
+        )
+        enr_res = await db.execute(enr_stmt)
+        if not enr_res.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not enrolled in the course for this lecture.",
+            )
+
     threshold = float(lecture.completion_threshold if (lecture and lecture.completion_threshold) else 90.0)
 
     stmt = select(LectureProgress).where(

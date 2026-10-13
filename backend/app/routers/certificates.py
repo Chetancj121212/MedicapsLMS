@@ -1,7 +1,7 @@
 """Certificate verification and student certificate download endpoints."""
 
 import os
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -14,12 +14,14 @@ from app.models.student import Student
 from app.models.user import User
 from app.services.auth_service import require_student
 from app.services.certificate_service import certificate_service
+from app.limiter import limiter
 
 router = APIRouter(prefix="/api/certificates", tags=["Certificates"])
 
 
 @router.get("/verify/{certificate_number}")
-async def verify_certificate(certificate_number: str, db: AsyncSession = Depends(get_db)):
+@limiter.limit("30/minute")
+async def verify_certificate(request: Request, certificate_number: str, db: AsyncSession = Depends(get_db)):
     """Public verification endpoint (Section 24, 25, 44). Anyone can scan QR and verify."""
     result = await certificate_service.verify_certificate(db, certificate_number)
     return result
@@ -80,7 +82,8 @@ async def get_my_certificates(
 
 
 @router.get("/{certificate_number}/download")
-async def download_certificate(certificate_number: str, db: AsyncSession = Depends(get_db)):
+@limiter.limit("20/minute")
+async def download_certificate(request: Request, certificate_number: str, db: AsyncSession = Depends(get_db)):
     """Serves the generated PDF certificate."""
     try:
         stmt = (
@@ -92,6 +95,12 @@ async def download_certificate(certificate_number: str, db: AsyncSession = Depen
         cert = res.scalar_one_or_none()
         if not cert:
             raise HTTPException(status_code=404, detail="Certificate not found")
+
+        if cert.is_revoked:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This certificate has been revoked by Medicaps University and cannot be downloaded.",
+            )
 
         cert_dir = os.path.abspath(settings.CERTIFICATE_DIR)
         os.makedirs(cert_dir, exist_ok=True)

@@ -43,9 +43,7 @@ class QuizService:
         attempts = res_attempts.scalars().all()
 
         if quiz.max_attempts and len(attempts) >= quiz.max_attempts:
-            # Check if any attempt was passed
-            if not any(a.passed for a in attempts):
-                raise ValueError(f"Maximum attempts ({quiz.max_attempts}) reached for this quiz.")
+            raise ValueError(f"Maximum attempts ({quiz.max_attempts}) reached for this quiz.")
 
         # Prepare questions (WITHOUT is_correct field for security)
         questions_list = list(quiz.questions)
@@ -118,6 +116,20 @@ class QuizService:
         if quiz.max_attempts and attempt_count >= quiz.max_attempts:
             raise ValueError("Maximum attempts exceeded")
 
+        # Concurrency / duplicate submission protection
+        stmt_recent = (
+            select(QuizAttempt)
+            .where(and_(QuizAttempt.student_id == student_id, QuizAttempt.quiz_id == quiz_id))
+            .order_by(QuizAttempt.submitted_at.desc())
+            .limit(1)
+        )
+        res_recent = await db.execute(stmt_recent)
+        recent_attempt = res_recent.scalar_one_or_none()
+        if recent_attempt and recent_attempt.submitted_at:
+            delta_sec = (datetime.utcnow() - recent_attempt.submitted_at).total_seconds()
+            if delta_sec < 3.0:
+                raise ValueError("Duplicate submission detected. Please wait before submitting again.")
+
         new_attempt_number = attempt_count + 1
 
         # Map questions and options
@@ -181,6 +193,24 @@ class QuizService:
             )
             db.add(q_ans)
 
+        await db.commit()
+
+        # Record attempt in unified security audit log
+        from app.utils.audit import record_audit
+        await record_audit(
+            db,
+            "QUIZ_SUBMITTED",
+            f"quiz:{quiz_id}:attempt:{attempt.id}",
+            actor_user_id=None,
+            metadata={
+                "student_id": student_id,
+                "attempt_number": new_attempt_number,
+                "score": earned_marks,
+                "total_marks": total_marks,
+                "percentage": percentage,
+                "passed": passed,
+            },
+        )
         await db.commit()
 
         # If passed, recalculate course progress and completion

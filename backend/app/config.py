@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     BASE_URL: str = "https://apimedicapslms.chetancj.in"
     FRONTEND_URL: str = "https://medicapslms.chetancj.in"
     CORS_ORIGINS: str = '["http://localhost:3000"]'
+    ENVIRONMENT: str = "development"
+    MAX_JSON_BODY_BYTES: int = 10 * 1024 * 1024  # 10 MB
 
     @property
     def cors_origins_list(self) -> List[str]:

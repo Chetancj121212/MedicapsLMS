@@ -111,6 +111,19 @@ require_admin = require_role(
 )
 require_student = require_role(UserRole.STUDENT)
 require_master_admin = require_role(UserRole.MASTER_ADMIN, UserRole.SUPER_ADMIN)
+require_dept_admin = require_role(
+    UserRole.MASTER_ADMIN,
+    UserRole.ADMIN,
+    UserRole.SUPER_ADMIN,
+    UserRole.DEPARTMENT_ADMIN,
+)
+require_instructor = require_role(
+    UserRole.MASTER_ADMIN,
+    UserRole.ADMIN,
+    UserRole.SUPER_ADMIN,
+    UserRole.DEPARTMENT_ADMIN,
+    UserRole.COURSE_INSTRUCTOR,
+)
 require_content_admin = require_role(
     UserRole.MASTER_ADMIN,
     UserRole.ADMIN,

@@ -72,6 +72,34 @@ async def check_database_health() -> bool:
         return False
 
 
+async def get_database_uptime() -> str:
+    """Fetch real database engine uptime from PostgreSQL or return operational mode."""
+    try:
+        async with engine.connect() as conn:
+            if conn.dialect.name == "postgresql":
+                res = await conn.execute(text("SELECT pg_postmaster_start_time()"))
+                start_time = res.scalar()
+                if start_time:
+                    from datetime import datetime, timezone
+                    now = datetime.now(start_time.tzinfo) if start_time.tzinfo else datetime.utcnow()
+                    delta = now - start_time
+                    days = delta.days
+                    hours, remainder = divmod(delta.seconds, 3600)
+                    minutes, seconds = divmod(remainder, 60)
+                    parts = []
+                    if days > 0:
+                        parts.append(f"{days}d")
+                    if hours > 0 or days > 0:
+                        parts.append(f"{hours}h")
+                    parts.append(f"{minutes}m")
+                    parts.append(f"{seconds}s")
+                    return " ".join(parts)
+            return "online (embedded)"
+    except Exception as exc:
+        logger.warning(f"Database uptime check failed: {exc}")
+        return "offline"
+
+
 async def init_db(max_retries: int = 5, retry_interval: float = 2.0):
     """Create all tables and run backward-compatible schema migrations with retry logic."""
     sanitized_url = settings.database_url.split("@")[-1] if "@" in settings.database_url else settings.database_url
@@ -152,10 +180,22 @@ async def init_db(max_retries: int = 5, retry_interval: float = 2.0):
                         "full_name": "VARCHAR(200)",
                         "email": "VARCHAR(320)",
                         "department": "VARCHAR(200)",
+                        "failed_login_attempts": "INTEGER DEFAULT 0 NOT NULL",
+                        "locked_until": "DATETIME",
                     }
                     for column, definition in sqlite_users.items():
                         try:
                             await conn.execute(text(f"ALTER TABLE users ADD COLUMN {column} {definition}"))
+                        except Exception:
+                            pass
+
+                    sqlite_audit = {
+                        "ip_address": "VARCHAR(45)",
+                        "user_agent": "VARCHAR(500)",
+                    }
+                    for column, definition in sqlite_audit.items():
+                        try:
+                            await conn.execute(text(f"ALTER TABLE audit_logs ADD COLUMN {column} {definition}"))
                         except Exception:
                             pass
 
@@ -173,6 +213,11 @@ async def init_db(max_retries: int = 5, retry_interval: float = 2.0):
                         "ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(200)",
                         "ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(320)",
                         "ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(200)",
+                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0 NOT NULL",
+                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP",
+                        "ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45)",
+                        "ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS user_agent VARCHAR(500)",
+                        "ALTER TABLE audit_logs ALTER COLUMN actor_user_id DROP NOT NULL",
                     ]
                     for stmt in pg_migrations:
                         try:
