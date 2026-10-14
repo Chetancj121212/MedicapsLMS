@@ -2,7 +2,16 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { fetchApi } from "@/lib/api";
-import { Pause, Play, CheckCircle2, ChevronRight, Award } from "lucide-react";
+import {
+  Pause,
+  Play,
+  CheckCircle2,
+  ChevronRight,
+  Award,
+  AlertCircle,
+  ExternalLink,
+  Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 interface YouTubePlayer {
@@ -200,6 +209,8 @@ export function VideoPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [completedState, setCompletedState] = useState(isCompleted);
+  const [playerError, setPlayerError] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   const isEffectivelyCompleted = completedState || isCompleted;
   const displayPercentage = isEffectivelyCompleted ? 100 : watchPercentage;
@@ -400,6 +411,8 @@ export function VideoPlayer({
     console.log(`[VIDEO_INIT] lectureId=${lectureId} videoId=${resolvedId}`);
 
     let isDisposed = false;
+    let pollTimer: number | null = null;
+    let timeoutTimer: number | null = null;
 
     const createPlayer = () => {
       const youtube = window.YT;
@@ -410,125 +423,179 @@ export function VideoPlayer({
         return;
       }
 
-      playerRef.current = new youtube.Player(containerRef.current, {
-        videoId: resolvedId,
-        width: "100%",
-        height: "100%",
-        playerVars: {
-          autoplay: 0,
-          controls: 1,
-          enablejsapi: 1,
-          fs: 1,
-          modestbranding: 1,
-          playsinline: 1,
-          rel: 0,
-        },
-        events: {
-          onReady: (event: YouTubeEvent) => {
-            if (isDisposed) return;
-            const length = Number(event.target.getDuration?.() || 0);
-            console.log(`[VIDEO_READY] duration=${length}`);
-            if (length > 0) {
-              durationRef.current = length;
-            }
+      // Ensure stable target div inside containerRef to protect React DOM hierarchy
+      containerRef.current.innerHTML = "";
+      const target = document.createElement("div");
+      target.className = "w-full h-full";
+      containerRef.current.appendChild(target);
 
-            // Only seek to resume position ONCE, and NEVER seek to the end!
-            if (!hasResumedRef.current) {
-              hasResumedRef.current = true;
-              const targetPos = initialPositionRef.current;
-              if (
-                targetPos > 0 &&
-                (!length || targetPos < length - 3) &&
-                !isCompletedRef.current
-              ) {
-                console.log(`[VIDEO_TIME] Resuming from saved position: currentTime=${targetPos} duration=${length}`);
-                event.target.seekTo?.(targetPos, true);
-              } else {
-                console.log(`[VIDEO_TIME] Starting from position 0 (targetPos=${targetPos}, duration=${length})`);
-              }
-            }
+      try {
+        playerRef.current = new youtube.Player(target, {
+          videoId: resolvedId,
+          width: "100%",
+          height: "100%",
+          playerVars: {
+            autoplay: 0,
+            controls: 1,
+            enablejsapi: 1,
+            fs: 1,
+            modestbranding: 1,
+            playsinline: 1,
+            rel: 0,
           },
-          onStateChange: (event: YouTubeEvent) => {
-            if (isDisposed) return;
-            const current = Number(
-              event.target.getCurrentTime?.() || lastPositionRef.current,
-            );
-            const dur = Number(
-              event.target.getDuration?.() || durationRef.current || 0,
-            );
-            lastPositionRef.current = current;
-
-            const isPlayingNow = event.data === window.YT?.PlayerState.PLAYING;
-            const isPaused = event.data === window.YT?.PlayerState.PAUSED;
-            const isEnded = event.data === window.YT?.PlayerState.ENDED;
-            const isBuffering = event.data === window.YT?.PlayerState.BUFFERING;
-
-            const stateName = isPlayingNow
-              ? "PLAYING"
-              : isPaused
-                ? "PAUSED"
-                : isEnded
-                  ? "ENDED"
-                  : isBuffering
-                    ? "BUFFERING"
-                    : `STATE_${event.data}`;
-
-            console.log(`[VIDEO_STATE] state=${stateName}`);
-            console.log(`[VIDEO_TIME] currentTime=${current.toFixed(2)} duration=${dur.toFixed(2)}`);
-
-            const wasPlaying = playingRef.current;
-            playingRef.current = isPlayingNow;
-            setIsPlaying(isPlayingNow);
-
-            if (isPlayingNow) {
-              endHandledRef.current = false;
-              if (!wasPlaying) {
-                currentSegmentStartRef.current = current;
-                lastTickRef.current = Date.now();
+          events: {
+            onReady: (event: YouTubeEvent) => {
+              if (isDisposed) return;
+              setIsReady(true);
+              setPlayerError(null);
+              const length = Number(event.target.getDuration?.() || 0);
+              console.log(`[VIDEO_READY] duration=${length}`);
+              if (length > 0) {
+                durationRef.current = length;
               }
-            } else if (wasPlaying) {
-              // Closed segment on pause / buffering / end
-              if (currentSegmentStartRef.current !== null) {
-                const segStart = currentSegmentStartRef.current;
-                if (current > segStart) {
-                  watchedSegmentsRef.current.push([segStart, current]);
+
+              // Only seek to resume position ONCE, and NEVER seek to the end!
+              if (!hasResumedRef.current) {
+                hasResumedRef.current = true;
+                const targetPos = initialPositionRef.current;
+                if (
+                  targetPos > 0 &&
+                  (!length || targetPos < length - 3) &&
+                  !isCompletedRef.current
+                ) {
+                  console.log(`[VIDEO_TIME] Resuming from saved position: currentTime=${targetPos} duration=${length}`);
+                  event.target.seekTo?.(targetPos, true);
+                } else {
+                  console.log(`[VIDEO_TIME] Starting from position 0 (targetPos=${targetPos}, duration=${length})`);
                 }
-                currentSegmentStartRef.current = null;
               }
-              void syncRef.current(false);
-            }
+            },
+            onStateChange: (event: YouTubeEvent) => {
+              if (isDisposed) return;
+              const current = Number(
+                event.target.getCurrentTime?.() || lastPositionRef.current,
+              );
+              const dur = Number(
+                event.target.getDuration?.() || durationRef.current || 0,
+              );
+              lastPositionRef.current = current;
 
-            if (isEnded) {
-              void handlePlaybackEndedRef.current();
-            }
+              const isPlayingNow = event.data === window.YT?.PlayerState.PLAYING;
+              const isPaused = event.data === window.YT?.PlayerState.PAUSED;
+              const isEnded = event.data === window.YT?.PlayerState.ENDED;
+              const isBuffering = event.data === window.YT?.PlayerState.BUFFERING;
+
+              const stateName = isPlayingNow
+                ? "PLAYING"
+                : isPaused
+                  ? "PAUSED"
+                  : isEnded
+                    ? "ENDED"
+                    : isBuffering
+                      ? "BUFFERING"
+                      : `STATE_${event.data}`;
+
+              console.log(`[VIDEO_STATE] state=${stateName}`);
+              console.log(`[VIDEO_TIME] currentTime=${current.toFixed(2)} duration=${dur.toFixed(2)}`);
+
+              const wasPlaying = playingRef.current;
+              playingRef.current = isPlayingNow;
+              setIsPlaying(isPlayingNow);
+
+              if (isPlayingNow) {
+                endHandledRef.current = false;
+                if (!wasPlaying) {
+                  currentSegmentStartRef.current = current;
+                  lastTickRef.current = Date.now();
+                }
+              } else if (wasPlaying) {
+                // Closed segment on pause / buffering / end
+                if (currentSegmentStartRef.current !== null) {
+                  const segStart = currentSegmentStartRef.current;
+                  if (current > segStart) {
+                    watchedSegmentsRef.current.push([segStart, current]);
+                  }
+                  currentSegmentStartRef.current = null;
+                }
+                void syncRef.current(false);
+              }
+
+              if (isEnded) {
+                void handlePlaybackEndedRef.current();
+              }
+            },
+            onError: (event: { data: number }) => {
+              console.warn(`[VIDEO_ERROR] YouTube player error code: ${event.data}`);
+              let msg = "Video playback issue encountered.";
+              if (event.data === 2) msg = "Invalid video parameter or URL.";
+              else if (event.data === 5) msg = "HTML5 player error.";
+              else if (event.data === 100) msg = "This video is private or has been removed from YouTube.";
+              else if (event.data === 101 || event.data === 150)
+                msg = "The video creator has disabled embedded playback for this video.";
+              setPlayerError(msg);
+            },
           },
-          onError: (event: { data: number }) => {
-            console.warn(`[VIDEO_ERROR] YouTube player error code: ${event.data}`);
-          },
-        },
-      });
+        });
+      } catch (err) {
+        console.error("[VIDEO_ERROR] Failed to construct YT.Player:", err);
+        setPlayerError("Failed to initialize YouTube video player.");
+      }
     };
 
     if (window.YT?.Player) {
       createPlayer();
     } else {
-      const script =
-        document.querySelector(
-          "script[src='https://www.youtube.com/iframe_api']",
-        ) || document.createElement("script");
-      if (!script.parentNode) {
+      let script = document.querySelector<HTMLScriptElement>(
+        "script[src='https://www.youtube.com/iframe_api']",
+      );
+      if (!script) {
+        script = document.createElement("script");
         script.setAttribute("src", "https://www.youtube.com/iframe_api");
+        script.async = true;
+        script.onerror = () => {
+          if (!isDisposed) {
+            setPlayerError(
+              "Unable to load YouTube API. Please check your internet connection or Content-Security-Policy.",
+            );
+          }
+        };
         document.body.appendChild(script);
       }
+
       const prevCallback = window.onYouTubeIframeAPIReady;
       window.onYouTubeIframeAPIReady = () => {
         prevCallback?.();
         createPlayer();
       };
+
+      // Periodic check in case iframe_api is already in flight or callback already fired
+      pollTimer = window.setInterval(() => {
+        if (isDisposed) {
+          if (pollTimer) window.clearInterval(pollTimer);
+          return;
+        }
+        if (window.YT?.Player) {
+          if (pollTimer) window.clearInterval(pollTimer);
+          pollTimer = null;
+          createPlayer();
+        }
+      }, 150);
+
+      // Timeout fallback after 10s if YT never initializes
+      timeoutTimer = window.setTimeout(() => {
+        if (isDisposed) return;
+        if (!window.YT?.Player && !playerRef.current) {
+          setPlayerError(
+            "YouTube Player took too long to respond. The video may be blocked by network policy or CSP.",
+          );
+        }
+      }, 10000);
     }
 
     return () => {
       isDisposed = true;
+      if (pollTimer) window.clearInterval(pollTimer);
+      if (timeoutTimer) window.clearTimeout(timeoutTimer);
       const player = playerRef.current;
       if (player && !(player instanceof HTMLVideoElement)) {
         try {
@@ -536,7 +603,11 @@ export function VideoPlayer({
         } catch {}
       }
       playerRef.current = null;
+      if (containerRef.current) {
+        containerRef.current.innerHTML = "";
+      }
       hasResumedRef.current = false;
+      setIsReady(false);
     };
   }, [resolvedId, sourceType, lectureId]);
 
@@ -812,6 +883,42 @@ export function VideoPlayer({
     <div className="space-y-2">
       <div className="relative bg-black rounded-xl overflow-hidden aspect-video border border-border-subtle">
         <div ref={containerRef} className="absolute inset-0 w-full h-full" />
+        {!isReady && !playerError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-white gap-2 pointer-events-none">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <span className="text-xs text-text-secondary">Loading video lecture...</span>
+          </div>
+        )}
+        {playerError && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-gray-950/95 text-white p-6 text-center space-y-3">
+            <AlertCircle className="w-10 h-10 text-amber-400" />
+            <div>
+              <h4 className="font-semibold text-sm">Video Playback Notice</h4>
+              <p className="text-xs text-gray-300 max-w-md mt-1">{playerError}</p>
+            </div>
+            <div className="flex items-center gap-2 pt-2 flex-wrap justify-center">
+              <a
+                href={`https://www.youtube.com/watch?v=${resolvedId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg transition-colors"
+              >
+                Watch on YouTube <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs text-gray-900 bg-white hover:bg-gray-100"
+                onClick={async () => {
+                  await handlePlaybackEnded();
+                  onNext?.();
+                }}
+              >
+                Mark Complete & Next
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
       <VideoProgressBar playing={isPlaying} progress={displayPercentage} />
       {countdown !== null && onNext && (

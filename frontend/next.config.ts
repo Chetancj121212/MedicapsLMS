@@ -44,8 +44,18 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Content-Security-Policy",
-            value:
-              "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data: https:; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self' https: http:; media-src 'self' data: blob:;",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://s.ytimg.com https://static.cloudflareinsights.com",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https:",
+              "img-src 'self' data: https: blob: https://i.ytimg.com https://*.ytimg.com",
+              "font-src 'self' data: https: https://fonts.gstatic.com",
+              "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://drive.google.com",
+              "connect-src 'self' https: http: ws: wss: https://www.youtube.com https://*.youtube.com https://cloudflareinsights.com https://static.cloudflareinsights.com",
+              "media-src 'self' data: blob: https: http:",
+              "worker-src 'self' blob:",
+              "child-src 'self' blob: https://www.youtube.com https://www.youtube-nocookie.com https://drive.google.com",
+            ].join("; ") + ";",
           },
         ],
       },

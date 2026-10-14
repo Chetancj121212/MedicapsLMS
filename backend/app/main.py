@@ -113,11 +113,15 @@ async def security_headers_middleware(request: Request, call_next):
     response: Response = await call_next(request)
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; "
-        "img-src 'self' data: https: blob:; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-        "style-src 'self' 'unsafe-inline'; "
-        "connect-src 'self' https:;"
+        "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://drive.google.com; "
+        "img-src 'self' data: https: blob: https://i.ytimg.com https://*.ytimg.com; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://s.ytimg.com https://static.cloudflareinsights.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https:; "
+        "font-src 'self' data: https: https://fonts.gstatic.com; "
+        "connect-src 'self' https: http: ws: wss: https://www.youtube.com https://*.youtube.com https://cloudflareinsights.com https://static.cloudflareinsights.com; "
+        "media-src 'self' data: blob: https: http:; "
+        "worker-src 'self' blob:; "
+        "child-src 'self' blob: https://www.youtube.com https://www.youtube-nocookie.com https://drive.google.com;"
     )
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
